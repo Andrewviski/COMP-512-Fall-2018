@@ -24,6 +24,8 @@ hs_err_pid*
 
 .idea
 
+# Ignore policy files
+*.policy
 # doc files
 *.pdf
 
