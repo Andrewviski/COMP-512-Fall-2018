@@ -6,7 +6,6 @@ package Server.RMI;
 
 public class RMIMiddleware
 {
-
     public static void main(String args[])
     {
 
