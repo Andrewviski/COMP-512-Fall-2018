@@ -2,23 +2,73 @@ package Client;
 
 import Server.Interface.*;
 
+import java.net.Socket;
 import java.util.*;
 import java.io.*;
-import java.rmi.RemoteException;
-import java.rmi.ConnectException;
-import java.rmi.ServerException;
-import java.rmi.UnmarshalException;
+
 
 public abstract class Client
 {
 	IResourceManager m_resourceManager = null;
 
-	public Client()
+	private static String s_serverHost = "localhost";
+	private static int s_serverPort = 1099;
+	private static String s_serverName = "Middleware";
+
+	private static String s_rmiPrefix = "group16_";
+
+	public static void main(String args[])
 	{
-		super();
+		if (args.length > 0)
+		{
+			s_serverHost = args[0];
+		}
+		if (args.length > 1)
+		{
+			s_serverName = args[1];
+		}
+		if (args.length > 2)
+		{
+			System.err.println((char)27 + "[31;1mClient exception: " + (char)27 + "[0mUsage: java client.RMIClient [server_hostname [server_rmiobject]]");
+			System.exit(1);
+		}
+
+		// Set the security policy
+		if (System.getSecurityManager() == null)
+		{
+			System.setSecurityManager(new SecurityManager());
+		}
+
+		// Get a reference to the RMIRegister
+		try {
+			RMIClient client = new RMIClient();
+			client.connectServer();
+			client.start();
+		}
+		catch (Exception e) {
+			System.err.println((char)27 + "[31;1mClient exception: " + (char)27 + "[0mUncaught exception");
+			e.printStackTrace();
+			System.exit(1);
+		}
 	}
 
-	public abstract void connectServer();
+	public void connectServer()
+	{
+        try {
+            Socket echoSocket = new Socket(s_serverHost, s_serverPort);
+            PrintWriter  out = new PrintWriter(echoSocket.getOutputStream(), true);
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(echoSocket.getInputStream()));
+
+            m_resourceManager = new ClientNetworkInterface(out, in);
+
+        }
+        catch (Exception e) {
+            System.err.println((char)27 + "[31;1mServer exception: " + (char)27 + "[0mUncaught exception");
+            e.printStackTrace();
+            System.exit(1);
+        }
+	}
 
 	public void start()
 	{
@@ -49,16 +99,13 @@ public abstract class Client
 				try {
 					execute(cmd, arguments);
 				}
-				catch (ConnectException e) {
+				catch (Exception e) {
 					connectServer();
 					execute(cmd, arguments);
 				}
 			}
-			catch (IllegalArgumentException|ServerException e) {
+			catch (IllegalArgumentException e) {
 				System.err.println((char)27 + "[31;1mCommand exception: " + (char)27 + "[0m" + e.getLocalizedMessage());
-			}
-			catch (ConnectException|UnmarshalException e) {
-				System.err.println((char)27 + "[31;1mCommand exception: " + (char)27 + "[0mConnection to server lost");
 			}
 			catch (Exception e) {
 				System.err.println((char)27 + "[31;1mCommand exception: " + (char)27 + "[0mUncaught exception");
@@ -67,7 +114,7 @@ public abstract class Client
 		}
 	}
 
-	public void execute(Command cmd, Vector<String> arguments) throws RemoteException, NumberFormatException
+	public void execute(Command cmd, Vector<String> arguments) throws NumberFormatException
 	{
 		switch (cmd)
 		{
