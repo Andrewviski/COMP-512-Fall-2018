@@ -1,8 +1,5 @@
-./run_rmi.sh > /dev/null
+#@IgnoreInspection BashAddShebang
+#Usage: ./run_middleware.sh [<hostname of Flights>] [<hostname of Rooms>] [<hostname of Cars>] [<hostname of Customers>]
 
-echo "Edit file run_middleware.sh to include instructions for launching the middleware"
-echo '  $1 - hostname of Flights'
-echo '  $2 - hostname of Cars'
-echo '  $3 - hostname of Rooms'
-
-# java -Djava.security.policy=java.policy -Djava.rmi.server.codebase=file:$(pwd)/ Server.RMI.RMIMiddleware $1 $2 $3
+./run_rmi.sh > /dev/null 2>&1
+java -Djava.security.policy=java.policy -Djava.rmi.server.codebase=file:$(pwd)/ Server.RMI.RMIMiddleware $1 $2 $3 $4
