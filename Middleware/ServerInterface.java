@@ -49,16 +49,19 @@ public class ServerInterface {
     public void startProcessing()
     {
         new Thread(() -> {
-            try {
-                ServerRequest request = queue.take();
-                sendRequestToServer(request.request);
-                String response = readReplyFromServer();
+            while(true){
+                try {
+                    ServerRequest request = queue.take();
+                    sendRequestToServer(request.request);
+                    String response = readReplyFromServer();
 
-                request.clientOut.println(response);
+                    request.clientOut.println(response);
 
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
+
         }).start();
     }
 
