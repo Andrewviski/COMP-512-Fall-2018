@@ -7,11 +7,11 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Vector;
 
-public class ClientNetworkInterface implements IResourceManager {
+public class ClientSideResourceManager implements IResourceManager {
     private PrintWriter out;
     private BufferedReader in;
 
-    public ClientNetworkInterface(PrintWriter out, BufferedReader in) {
+    public ClientSideResourceManager(PrintWriter out, BufferedReader in) {
         this.out = out;
         this.in = in;
     }
@@ -21,7 +21,7 @@ public class ClientNetworkInterface implements IResourceManager {
         String rpc = "addFlight," + Integer.toString(id) + "," + Integer.toString(flightNum)
                 + "," +  Integer.toString(flightSeats)+ "," +  Integer.toString(flightPrice);
 
-        out.write(rpc);
+        out.println(rpc);
 
         return readBooleanResponse();
     }
@@ -31,7 +31,7 @@ public class ClientNetworkInterface implements IResourceManager {
         String rpc = "addCars," + Integer.toString(id) + "," + location
                 + "," +  Integer.toString(numCars)+ "," +  Integer.toString(price);
 
-        out.write(rpc);
+        out.println(rpc);
 
         return readBooleanResponse();
     }
@@ -78,7 +78,7 @@ public class ClientNetworkInterface implements IResourceManager {
         String rpc = "addRooms," + Integer.toString(id) + "," + location
                 + "," +  Integer.toString(numRooms)+ "," +  Integer.toString(price);
 
-        out.write(rpc);
+        out.println(rpc);
 
         return readBooleanResponse();
     }
@@ -87,7 +87,7 @@ public class ClientNetworkInterface implements IResourceManager {
     public int newCustomer(int id) {
         String rpc = "newCustomer," + Integer.toString(id);
 
-        out.write(rpc);
+        out.println(rpc);
 
         return readIntegerResponse();
     }
@@ -96,7 +96,7 @@ public class ClientNetworkInterface implements IResourceManager {
     public boolean newCustomer(int id, int cid) {
         String rpc = "newCustomer," + Integer.toString(id) + "," + Integer.toString(cid);
 
-        out.write(rpc);
+        out.println(rpc);
 
         return readBooleanResponse();
     }
@@ -105,7 +105,7 @@ public class ClientNetworkInterface implements IResourceManager {
     public boolean deleteFlight(int id, int flightNum) {
         String rpc = "deleteFlight," + Integer.toString(id) + "," + Integer.toString(flightNum);
 
-        out.write(rpc);
+        out.println(rpc);
 
         return readBooleanResponse();
     }
@@ -114,7 +114,7 @@ public class ClientNetworkInterface implements IResourceManager {
     public boolean deleteCars(int id, String location) {
         String rpc = "deleteCars," + Integer.toString(id) + "," + location;
 
-        out.write(rpc);
+        out.println(rpc);
 
         return readBooleanResponse();
     }
@@ -123,7 +123,7 @@ public class ClientNetworkInterface implements IResourceManager {
     public boolean deleteRooms(int id, String location) {
         String rpc = "deleteRooms," + Integer.toString(id) + "," + location;
 
-        out.write(rpc);
+        out.println(rpc);
 
         return readBooleanResponse();
     }
@@ -132,7 +132,7 @@ public class ClientNetworkInterface implements IResourceManager {
     public boolean deleteCustomer(int id, int customerID) {
         String rpc = "deleteCustomer," + Integer.toString(id) + "," + Integer.toString(customerID);
 
-        out.write(rpc);
+        out.println(rpc);
 
         return readBooleanResponse();
     }
@@ -141,7 +141,7 @@ public class ClientNetworkInterface implements IResourceManager {
     public int queryFlight(int id, int flightNumber) {
         String rpc = "queryFlight," + Integer.toString(id) + "," + Integer.toString(flightNumber);
 
-        out.write(rpc);
+        out.println(rpc);
 
         return readIntegerResponse();
     }
@@ -150,7 +150,7 @@ public class ClientNetworkInterface implements IResourceManager {
     public int queryCars(int id, String location) {
         String rpc = "queryCars," + Integer.toString(id) + "," + location;
 
-        out.write(rpc);
+        out.println(rpc);
 
         return readIntegerResponse();
     }
@@ -158,7 +158,7 @@ public class ClientNetworkInterface implements IResourceManager {
     @Override
     public int queryRooms(int id, String location) {
         String rpc = "queryRooms," + Integer.toString(id) + "," + location;
-        out.write(rpc);
+        out.println(rpc);
 
         return readIntegerResponse();
     }
@@ -166,7 +166,7 @@ public class ClientNetworkInterface implements IResourceManager {
     @Override
     public String queryCustomerInfo(int id, int customerID) {
         String rpc = "queryCustomerInfo," + Integer.toString(id) + "," + Integer.toString(customerID);
-        out.write(rpc);
+        out.println(rpc);
 
         return readStringResponse();
     }
@@ -174,7 +174,7 @@ public class ClientNetworkInterface implements IResourceManager {
     @Override
     public int queryFlightPrice(int id, int flightNumber) {
         String rpc = "queryFlightPrice," + Integer.toString(id) + "," + Integer.toString(flightNumber);
-        out.write(rpc);
+        out.println(rpc);
 
         return readIntegerResponse();
     }
@@ -182,7 +182,7 @@ public class ClientNetworkInterface implements IResourceManager {
     @Override
     public int queryCarsPrice(int id, String location) {
         String rpc = "queryCarsPrice," + Integer.toString(id) + "," + location;
-        out.write(rpc);
+        out.println(rpc);
 
         return readIntegerResponse();
     }
@@ -190,7 +190,7 @@ public class ClientNetworkInterface implements IResourceManager {
     @Override
     public int queryRoomsPrice(int id, String location) {
         String rpc = "queryRoomsPrice," + Integer.toString(id) + "," + location;
-        out.write(rpc);
+        out.println(rpc);
 
         return readIntegerResponse();
     }
@@ -198,7 +198,7 @@ public class ClientNetworkInterface implements IResourceManager {
     @Override
     public boolean reserveFlight(int id, int customerID, int flightNumber) {
         String rpc = "reserveFlight," + Integer.toString(id) + "," + Integer.toString(customerID) + "," + Integer.toString(flightNumber);
-        out.write(rpc);
+        out.println(rpc);
 
         return readBooleanResponse();
     }
@@ -206,7 +206,7 @@ public class ClientNetworkInterface implements IResourceManager {
     @Override
     public boolean reserveCar(int id, int customerID, String location) {
         String rpc = "reserveCar," + Integer.toString(id) + "," + Integer.toString(customerID) + "," + location;
-        out.write(rpc);
+        out.println(rpc);
 
         return readBooleanResponse();
     }
@@ -214,7 +214,7 @@ public class ClientNetworkInterface implements IResourceManager {
     @Override
     public boolean reserveRoom(int id, int customerID, String location) {
         String rpc = "reserveCar," + Integer.toString(id) + "," + Integer.toString(customerID) + "," + location;
-        out.write(rpc);
+        out.println(rpc);
 
         return readBooleanResponse();
     }
@@ -223,7 +223,7 @@ public class ClientNetworkInterface implements IResourceManager {
     public boolean bundle(int id, int customerID, Vector<String> flightNumbers, String location, boolean car, boolean room) {
         String rpc = "bundle," + Integer.toString(id) + "," + Integer.toString(customerID) + ",[" + String.join(" ", flightNumbers)
                 + "]," + location + "," + String.valueOf(car) + "," + String.valueOf(room);
-        out.write(rpc);
+        out.println(rpc);
 
         return readBooleanResponse();
     }
@@ -231,7 +231,7 @@ public class ClientNetworkInterface implements IResourceManager {
     @Override
     public String getName() {
         String rpc = "getName";
-        out.write(rpc);
+        out.println(rpc);
 
         return readStringResponse();
     }
