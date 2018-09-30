@@ -8,7 +8,7 @@ import java.io.*;
 public class RMIClient extends Client
 {
     private static String s_serverHost = "localhost";
-    private static int s_serverPort = 1099;
+    private static int middleware_port = 1099;
     private static String s_serverName = "Middleware";
 
     private static String s_rmiPrefix = "group16_";
@@ -51,7 +51,7 @@ public class RMIClient extends Client
     public void connectServer()
     {
         try {
-            Socket echoSocket = new Socket(s_serverHost, s_serverPort);
+            Socket echoSocket = new Socket(s_serverHost, middleware_port);
             PrintWriter  out = new PrintWriter(echoSocket.getOutputStream(), true);
             BufferedReader in = new BufferedReader(
                     new InputStreamReader(echoSocket.getInputStream()));
