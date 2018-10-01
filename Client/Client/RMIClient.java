@@ -57,7 +57,6 @@ public class RMIClient extends Client
                     new InputStreamReader(echoSocket.getInputStream()));
 
             m_resourceManager = new ClientSideResourceManager(out, in);
-
         }
         catch (Exception e) {
             System.err.println((char)27 + "[31;1mServer exception: " + (char)27 + "[0mUncaught exception");
