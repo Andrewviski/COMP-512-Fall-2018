@@ -69,7 +69,9 @@ public class RMIClient extends Client
 			boolean first = true;
 			while (true) {
 				try {
+					System.out.println("Getting Registry " + server+port);
 					Registry registry = LocateRegistry.getRegistry(server, port);
+					System.out.println("Getting resource manager at " + s_rmiPrefix + name);
 					m_resourceManager = (IResourceManager)registry.lookup(s_rmiPrefix + name);
 					System.out.println("Connected to '" + name + "' server [" + server + ":" + port + "/" + s_rmiPrefix + name + "]");
 					break;
