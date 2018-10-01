@@ -4,20 +4,11 @@ import Server.Interface.*;
 
 import java.util.*;
 import java.io.*;
-import java.rmi.RemoteException;
-import java.rmi.ConnectException;
-import java.rmi.ServerException;
-import java.rmi.UnmarshalException;
+
 
 public abstract class Client
 {
 	IResourceManager m_resourceManager = null;
-
-	public Client()
-	{
-		super();
-	}
-
 	public abstract void connectServer();
 
 	public void start()
@@ -49,16 +40,13 @@ public abstract class Client
 				try {
 					execute(cmd, arguments);
 				}
-				catch (ConnectException e) {
+				catch (Exception e) {
 					connectServer();
 					execute(cmd, arguments);
 				}
 			}
-			catch (IllegalArgumentException|ServerException e) {
+			catch (IllegalArgumentException e) {
 				System.err.println((char)27 + "[31;1mCommand exception: " + (char)27 + "[0m" + e.getLocalizedMessage());
-			}
-			catch (ConnectException|UnmarshalException e) {
-				System.err.println((char)27 + "[31;1mCommand exception: " + (char)27 + "[0mConnection to server lost");
 			}
 			catch (Exception e) {
 				System.err.println((char)27 + "[31;1mCommand exception: " + (char)27 + "[0mUncaught exception");
@@ -67,7 +55,7 @@ public abstract class Client
 		}
 	}
 
-	public void execute(Command cmd, Vector<String> arguments) throws RemoteException, NumberFormatException
+	public void execute(Command cmd, Vector<String> arguments) throws NumberFormatException
 	{
 		switch (cmd)
 		{

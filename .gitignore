@@ -21,6 +21,7 @@ hs_err_pid*
 
 # Ignore intellj files
 .idea
+*.iml
 
 # Ignore policy files
 *.policy
