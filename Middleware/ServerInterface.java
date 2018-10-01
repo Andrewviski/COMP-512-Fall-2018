@@ -8,8 +8,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class ServerInterface {
 
     private static class ServerRequest {
-        String request;
-        PrintWriter clientOut;
+        private String request;
+        private PrintWriter clientOut;
 
         public ServerRequest(String request, PrintWriter clientOut) {
             this.request = request;

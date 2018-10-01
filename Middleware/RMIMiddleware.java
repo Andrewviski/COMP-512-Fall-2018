@@ -106,15 +106,20 @@ public class RMIMiddleware {
             while (true) {
                 Socket clientSocket = serverSocket.accept();
 
-                PrintWriter out =
-                        new PrintWriter(clientSocket.getOutputStream(), true);
-                BufferedReader in = new BufferedReader(
-                        new InputStreamReader(clientSocket.getInputStream()));
+                new Thread(() -> {
+                    try {
+                        PrintWriter out =
+                                new PrintWriter(clientSocket.getOutputStream(), true);
+                        BufferedReader in = new BufferedReader(
+                                new InputStreamReader(clientSocket.getInputStream()));
 
-                String request = in.readLine();
+                        String request = in.readLine();
+                        handleRequest(request, out);
 
-                handleRequest(request, out);
-
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }).start();
             }
         } catch (IOException e) {
             e.printStackTrace();
