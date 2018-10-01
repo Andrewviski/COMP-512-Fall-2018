@@ -113,8 +113,10 @@ public class RMIMiddleware {
                         BufferedReader in = new BufferedReader(
                                 new InputStreamReader(clientSocket.getInputStream()));
 
-                        String request = in.readLine();
-                        handleRequest(request, out);
+                        while(true){
+                            String request = in.readLine();
+                            handleRequest(request, out);
+                        }
 
                     } catch (IOException e) {
                         e.printStackTrace();
