@@ -1,4 +1,4 @@
-// -------------------------------
+package Middleware;// -------------------------------
 // adapted from Kevin T. Manley
 // CSE 593
 // -------------------------------
@@ -48,7 +48,7 @@ public class RMIMiddleware {
 
     public static void main(String args[]) {
         if (args.length > 4) {
-            System.err.println((char) 27 + "[31;1mMiddleware exception: " + (char) 27 + "[0mUsage: java server.RMIMiddleware [flights_server_hostname] [rooms_server_hostname] [cars_server_hostname] [customers_server_hostname]");
+            System.err.println((char) 27 + "[31;1mMiddleware exception: " + (char) 27 + "[0mUsage: java server.Middleware.RMIMiddleware [flights_server_hostname] [rooms_server_hostname] [cars_server_hostname] [customers_server_hostname]");
             System.exit(1);
         }
 
