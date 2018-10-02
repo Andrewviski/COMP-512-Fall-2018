@@ -1,8 +1,3 @@
-// -------------------------------
-// adapted from Kevin T. Manley
-// CSE 593
-// -------------------------------
-
 package Server.RMI;
 
 import Server.Common.*;
@@ -15,22 +10,40 @@ import java.net.Socket;
 
 
 public class ServerSideResourceManager extends ResourceManager {
-    private static String s_serverName = "Server";
+    private static String name = "Server";
     private static String s_rmiPrefix = "group16_";
+    private static int port=54005;
 
+    private static void ReportServerError(String msg, Exception e) {
+        System.err.println((char) 27 + "[31;1mServer exception: " + (char) 27 + "[0m" + msg+" ]");
+        e.printStackTrace();
+        System.exit(1);
+    }
 
-    public static void main(String args[]) {
-        if (args.length > 0) {
-            s_serverName = args[0];
+    private static void parseConfig(String[] args){
+        if (args.length > 2 || args.length < 1 ) {
+            ReportServerError("Usage: java client.RMIClient [port] [servername]",null);
         }
 
-        // Create the RMI server entry
-        try {
-            // Create a new Server object
-            ServerSideResourceManager server = new ServerSideResourceManager(s_serverName);
-            ServerSocket serverSocket = new ServerSocket(1099);
+        if (args.length > 0) {
+            try {
+                port = Integer.parseInt(args[0]);
+            }catch(NumberFormatException e){
+                ReportServerError("Port is not a number, please try again!",e);
+            }
+        }
+        if (args.length > 1) {
+            name = args[1];
+        }
+    }
 
-            System.out.println("'" + s_serverName + "' resource manager server ready and bound to '" + s_rmiPrefix + s_serverName + "'");
+    public static void main(String args[]) {
+        try {
+            parseConfig(args);
+            ServerSideResourceManager server = new ServerSideResourceManager(name);
+            ServerSocket serverSocket = new ServerSocket(port);
+
+            System.out.println(name + " resource manager server ready and listening on port " + port);
 
             while (true) {
                 Socket clientSocket = serverSocket.accept();
@@ -48,11 +61,8 @@ public class ServerSideResourceManager extends ResourceManager {
 
 
         } catch (Exception e) {
-            System.err.println((char) 27 + "[31;1mServer exception: " + (char) 27 + "[0mUncaught exception");
-            e.printStackTrace();
-            System.exit(1);
+            ReportServerError("Uncaught exception",e);
         }
-
     }
 
     private void processRequest(String request, PrintWriter out) {
