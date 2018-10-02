@@ -12,7 +12,7 @@ import java.net.Socket;
 public class ServerSideResourceManager extends ResourceManager {
     private static String name = "Server";
     private static String s_rmiPrefix = "group16_";
-    private static int port=54005;
+    private static int port=54000;
 
     private static void ReportServerError(String msg, Exception e) {
         System.err.println((char) 27 + "[31;1mServer exception: " + (char) 27 + "[0m" + msg+" ]");
@@ -58,8 +58,6 @@ public class ServerSideResourceManager extends ResourceManager {
 
                 server.processRequest(request, out);
             }
-
-
         } catch (Exception e) {
             ReportServerError("Uncaught exception",e);
         }

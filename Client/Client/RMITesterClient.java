@@ -33,8 +33,8 @@ public class RMITesterClient extends RMIClient {
         for(ClientRequest<?> request: test_requests){
             List<String> s= Arrays.asList(request.getCommand().split(","));
             Command command=Command.fromString(s.get(0));
-            List<String> command_args=s.subList(1, s.size());
-            if(tester_client.executeAndReturn(command,command_args)!=request.getResponse()){
+            List<String> command_args=s;
+            if(tester_client.executeAndReturn(command,command_args).equals(request.getResponse())){
                 System.out.println(request.toString()+" Failed!");
                 System.exit(1);
             }

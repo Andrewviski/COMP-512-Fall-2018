@@ -17,7 +17,7 @@ PORTS=(54002 54003 54004 54005 54006)
 #
 #    if [[ $pid ]]; then
 #        echo 'killing ' $pid
-#        kill -9  $pid > /dev/null 2>1
+#        kill -9  $pid > /dev/null 2>&1
 #        sleep .2
 #    fi
 #
