@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
 
 # Flights, Rooms, Cars, Customers, MiddleWare
-MACHINES=(cs-12.cs.mcgill.ca
-          cs-13.cs.mcgill.ca
-          cs-14.cs.mcgill.ca
-          cs-15.cs.mcgill.ca
-          cs-17.cs.mcgill.ca)
+MACHINES=(open-12.cs.mcgill.ca
+          open-13.cs.mcgill.ca
+          open-14.cs.mcgill.ca
+          open-15.cs.mcgill.ca
+          open-16.cs.mcgill.ca)
 
 # Kill all processes listeing to the needed ports
 PORTS=(54002 54003 54004 54005 54006)
-for i in 0 1 2 3 4
-do
-    pid=$(lsof -i:${PORTS[$i]} -t)
 
-    if [[ $pid ]]; then
-        echo 'killing ' $pid
-        kill -9  $pid > /dev/null 2>1
-        sleep .2
-    fi
-
-done
+### NOT NEEDED
+#for i in 0 1 2 3 4
+#do
+#    pid=$(lsof -i:${PORTS[$i]} -t)
+#
+#    if [[ $pid ]]; then
+#        echo 'killing ' $pid
+#        kill -9  $pid > /dev/null 2>1
+#        sleep .2
+#    fi
+#
+#done
 
 # User dependent - Please Change before running the script
 USER=akaba2
@@ -49,12 +51,12 @@ tmux new-session \; \
 	split-window -v \; \
 	select-layout main-vertical \; \
 	select-pane -t 1 \; \
-	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[0]} \"cd ${SERVER_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; run_server.sh ${PORTS[0]} Flights\"" C-m \; \
+	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[0]} \"cd ${SERVER_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; ./run_server.sh ${PORTS[0]} Flights\"" C-m \; \
 	select-pane -t 2 \; \
-	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[1]} \"cd ${SERVER_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; run_server.sh ${PORTS[1]} Rooms\"" C-m \; \
+	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[1]} \"cd ${SERVER_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; ./run_server.sh ${PORTS[1]} Rooms\"" C-m \; \
 	select-pane -t 3 \; \
-	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[2]} \"cd ${SERVER_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; run_server.sh ${PORTS[2]} Cars\"" C-m \; \
+	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[2]} \"cd ${SERVER_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; ./run_server.sh ${PORTS[2]} Cars\"" C-m \; \
 	select-pane -t 4 \; \
-	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[3]} \"cd ${SERVER_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; run_server.sh ${PORTS[3]} Customers\"" C-m \; \
+	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[3]} \"cd ${SERVER_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; ./run_server.sh ${PORTS[3]} Customers\"" C-m \; \
 	select-pane -t 0 \; \
-	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[4]} \"cd ${MIDDLEWARE_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; sleep .5s; run_middleware.sh ${MACHINES[0]} ${MACHINES[1]} ${MACHINES[2]} ${MACHINES[3]} ${PORTS[0]} ${PORTS[1]} ${PORTS[2]} ${PORTS[3]}\"" C-m \;
+	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[4]} \"cd ${MIDDLEWARE_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; sleep .5s; ./run_middleware.sh ${MACHINES[0]} ${MACHINES[1]} ${MACHINES[2]} ${MACHINES[3]} ${PORTS[0]} ${PORTS[1]} ${PORTS[2]} ${PORTS[3]}\"" C-m \;
