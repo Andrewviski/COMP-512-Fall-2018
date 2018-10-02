@@ -90,7 +90,6 @@ public abstract class Client
 					System.out.println("Flight could not be added");
 					return false;
 				}
-				break;
 			}
 			case AddCars: {
 				checkArgumentsCount(5, arguments.size());
@@ -112,7 +111,6 @@ public abstract class Client
 					System.out.println("Cars could not be added");
 					return false;
 				}
-				break;
 			}
 			case AddRooms: {
 				checkArgumentsCount(5, arguments.size());
@@ -134,7 +132,6 @@ public abstract class Client
 					System.out.println("Rooms could not be added");
 					return false;
 				}
-				break;
 			}
 			case AddCustomer: {
 				checkArgumentsCount(2, arguments.size());
@@ -146,7 +143,6 @@ public abstract class Client
 
 				System.out.println("Add customer ID: " + customer);
 				return customer;
-				break;
 			}
 			case AddCustomerID: {
 				checkArgumentsCount(3, arguments.size());
@@ -164,7 +160,6 @@ public abstract class Client
 					System.out.println("Customer could not be added");
 					return null;
 				}
-				break;
 			}
 			case DeleteFlight: {
 				checkArgumentsCount(3, arguments.size());
@@ -182,7 +177,6 @@ public abstract class Client
 					System.out.println("Flight could not be deleted");
 					return false;
 				}
-				break;
 			}
 			case DeleteCars: {
 				checkArgumentsCount(3, arguments.size());
@@ -200,7 +194,6 @@ public abstract class Client
 					System.out.println("Cars could not be deleted");
 					return false;
 				}
-				break;
 			}
 			case DeleteRooms: {
 				checkArgumentsCount(3, arguments.size());
@@ -218,7 +211,6 @@ public abstract class Client
 					System.out.println("Rooms could not be deleted");
 					return false;
 				}
-				break;
 			}
 			case DeleteCustomer: {
 				checkArgumentsCount(3, arguments.size());
@@ -236,7 +228,6 @@ public abstract class Client
 					System.out.println("Customer could not be deleted");
 					return false;
 				}
-				break;
 			}
 			case QueryFlight: {
 				checkArgumentsCount(3, arguments.size());
@@ -250,7 +241,6 @@ public abstract class Client
 				int seats = resourceManager.queryFlight(id, flightNum);
 				System.out.println("Number of seats available: " + seats);
 				return seats;
-				break;
 			}
 			case QueryCars: {
 				checkArgumentsCount(3, arguments.size());
@@ -264,7 +254,6 @@ public abstract class Client
 				int numCars = resourceManager.queryCars(id, location);
 				System.out.println("Number of cars at this location: " + numCars);
 				return numCars;
-				break;
 			}
 			case QueryRooms: {
 				checkArgumentsCount(3, arguments.size());
@@ -278,7 +267,6 @@ public abstract class Client
 				int numRoom = resourceManager.queryRooms(id, location);
 				System.out.println("Number of rooms at this location: " + numRoom);
 				return numRoom;
-				break;
 			}
 			case QueryCustomer: {
 				checkArgumentsCount(3, arguments.size());
@@ -292,7 +280,6 @@ public abstract class Client
 				String bill = resourceManager.queryCustomerInfo(id, customerID);
 				System.out.print(bill);
 				return bill;
-				break;
 			}
 			case QueryFlightPrice: {
 				checkArgumentsCount(3, arguments.size());
@@ -306,7 +293,6 @@ public abstract class Client
 				int price = resourceManager.queryFlightPrice(id, flightNum);
 				System.out.println("Price of a seat: " + price);
 				return price;
-				break;
 			}
 			case QueryCarsPrice: {
 				checkArgumentsCount(3, arguments.size());
@@ -320,7 +306,6 @@ public abstract class Client
 				int price = resourceManager.queryCarsPrice(id, location);
 				System.out.println("Price of cars at this location: " + price);
 				return price;
-				break;
 			}
 			case QueryRoomsPrice: {
 				checkArgumentsCount(3, arguments.size());
@@ -334,7 +319,6 @@ public abstract class Client
 				int price = resourceManager.queryRoomsPrice(id, location);
 				System.out.println("Price of rooms at this location: " + price);
 				return price;
-				break;
 			}
 			case ReserveFlight: {
 				checkArgumentsCount(4, arguments.size());
@@ -354,7 +338,6 @@ public abstract class Client
 					System.out.println("Flight could not be reserved");
 					return false;
 				}
-				break;
 			}
 			case ReserveCar: {
 				checkArgumentsCount(4, arguments.size());
@@ -374,7 +357,6 @@ public abstract class Client
 					System.out.println("Car could not be reserved");
 					return false;
 				}
-				break;
 			}
 			case ReserveRoom: {
 				checkArgumentsCount(4, arguments.size());
@@ -394,7 +376,6 @@ public abstract class Client
 					System.out.println("Room could not be reserved");
 					return false;
 				}
-				break;
 			}
 			case Bundle: {
 				if (arguments.size() < 7) {
@@ -429,15 +410,15 @@ public abstract class Client
 					System.out.println("Bundle could not be reserved");
 					return false;
 				}
-				break;
 			}
 			case Quit:
 				checkArgumentsCount(1, arguments.size());
 
 				System.out.println("Quitting client");
-				return "Quitting client";
 				System.exit(0);
+				return "Quitting client";
 		}
+		return null;
 	}
 	public void execute(Command cmd, List<String> arguments) throws NumberFormatException
 	{

@@ -30,7 +30,6 @@ public class RMITesterClient extends RMIClient {
         }
         tester_client.connectServer();
 
-
         for(ClientRequest<?> request: test_requests){
             List<String> s= Arrays.asList(request.getCommand().split(","));
             Command command=Command.fromString(s.get(0));

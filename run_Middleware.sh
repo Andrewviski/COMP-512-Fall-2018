@@ -59,4 +59,4 @@ tmux new-session \; \
 	select-pane -t 4 \; \
 	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[3]} \"cd ${SERVER_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; ./run_server.sh ${PORTS[3]} Customers\"" C-m \; \
 	select-pane -t 0 \; \
-	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[4]} \"cd ${MIDDLEWARE_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; sleep .5s; ./run_middleware.sh ${MACHINES[0]} ${MACHINES[1]} ${MACHINES[2]} ${MACHINES[3]} ${PORTS[0]} ${PORTS[1]} ${PORTS[2]} ${PORTS[3]}\"" C-m \;
+	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[4]} \"cd ${MIDDLEWARE_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; sleep 1.5s; ./run_middleware.sh ${MACHINES[0]} ${MACHINES[1]} ${MACHINES[2]} ${MACHINES[3]} ${PORTS[0]} ${PORTS[1]} ${PORTS[2]} ${PORTS[3]}\"" C-m \;
