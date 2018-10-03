@@ -45,13 +45,13 @@ public class ServerSideResourceManager extends ResourceManager {
 
             System.out.println(name + " resource manager server ready and listening on port " + port);
 
+            Socket clientSocket = serverSocket.accept();
+            PrintWriter out =
+                    new PrintWriter(clientSocket.getOutputStream(), true);
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(clientSocket.getInputStream()));
+            
             while (true) {
-                Socket clientSocket = serverSocket.accept();
-
-                PrintWriter out =
-                        new PrintWriter(clientSocket.getOutputStream(), true);
-                BufferedReader in = new BufferedReader(
-                        new InputStreamReader(clientSocket.getInputStream()));
 
                 String request = in.readLine();
 
