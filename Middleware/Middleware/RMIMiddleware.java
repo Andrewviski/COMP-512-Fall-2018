@@ -7,21 +7,22 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Arrays;
+import java.util.Calendar;
 
 public class RMIMiddleware {
     private static String s_serverName = "Middleware";
     private static String s_rmiPrefix = "group16_";
 
-    private static final int SERVER_COUNT = 4;
+    private static final int SERVER_COUNT = 3;
 
     public static final int middleware_port = 54006;
 
     // These arrays will store server names, server hostnames, and resource managers for each resources in
     // the following order: Flights, Rooms, Cars, Customers.
-    private static String[] server_name = {"Flights", "Rooms", "Cars", "Customers"};
-    private static String[] server_hostname = {"localhost", "localhost", "localhost", "localhost"};
+    private static String[] server_name = {"Flights", "Rooms", "Cars"};
+    private static String[] server_hostname = {"localhost", "localhost", "localhost"};
     private static ServerInterface[] server_interfaces = new ServerInterface[SERVER_COUNT];
-    private static int server_ports[] = {54002, 54003, 54004, 54005};
+    private static int server_ports[] = {54002, 54003, 54004};
 
     // Resource managers accessors.
     public ServerInterface GetFlightsManager() {
@@ -36,10 +37,6 @@ public class RMIMiddleware {
         return server_interfaces[2];
     }
 
-    public ServerInterface GetCustomersManager() {
-        return server_interfaces[3];
-    }
-
     private static void ReportMiddleWareError(String msg, Exception e) {
         System.err.println((char) 27 + "[31;1mMiddleware exception: " + (char) 27 + "[0m" + msg+" ]");
         System.exit(1);
@@ -47,7 +44,8 @@ public class RMIMiddleware {
 
     public static void main(String args[]) {
         if (args.length != 0 && args.length != SERVER_COUNT && args.length != SERVER_COUNT * 2) {
-            ReportMiddleWareError("Usage: java server.Middleware.RMIMiddleware [flights_server_hostname] [rooms_server_hostname] [cars_server_hostname] [customers_server_hostname]", null);
+
+            ReportMiddleWareError("We got "+Integer.toString(args.length)+ "Args, Usage: java server.Middleware.RMIMiddleware [flights_server_hostname] [rooms_server_hostname] [cars_server_hostname]", null);
         }
 
         try {
@@ -91,7 +89,6 @@ public class RMIMiddleware {
             BufferedReader in = new BufferedReader(
                     new InputStreamReader(echoSocket.getInputStream()));
             server_interfaces[resource_manager_index] = new ServerInterface(out, in);
-            server_interfaces[resource_manager_index].startProcessing();
         } catch (Exception e) {
             ReportMiddleWareError("Cannot connect to server "+ server_name + " at( "+server_host+":"+port+" )",e);
         }
@@ -115,6 +112,8 @@ public class RMIMiddleware {
 
                         while (true) {
                             String request = in.readLine();
+                            if(request==null)
+                                break;
                             handleRequest(request, out);
                         }
 
@@ -153,9 +152,29 @@ public class RMIMiddleware {
                 GetRoomsManager().handleRequest(request, out);
                 break;
             case "newCustomer":
+                int cid = Integer.parseInt(String.valueOf(parts[1]) +
+                        String.valueOf(Calendar.getInstance().get(Calendar.MILLISECOND)) +
+                        String.valueOf(Math.round(Math.random() * 100 + 1)));
+                System.out.println("Request is newCustomerID,"+parts[1]+","+cid);
+                GetFlightsManager().handleRequest("newCustomerID,"+parts[1]+","+cid, out);
+                GetCarsManager().handleRequest("newCustomerID,"+parts[1]+","+cid, out);
+                GetRoomsManager().handleRequest("newCustomerID,"+parts[1]+","+cid, out);
+                break;
+            case "newCustomerID":
+                System.out.println("Request is:"+request);
+                GetFlightsManager().handleRequest(request, out);
+                GetCarsManager().handleRequest(request, out);
+                GetRoomsManager().handleRequest(request, out);
+                break;
             case "deleteCustomer":
+                GetFlightsManager().handleRequest(request, out);
+                GetCarsManager().handleRequest(request, out);
+                GetRoomsManager().handleRequest(request, out);
+                break;
             case "queryCustomerInfo":
-                GetCustomersManager().handleRequest(request, out);
+                GetFlightsManager().handleRequest(request, out);
+                GetCarsManager().handleRequest(request, out);
+                GetRoomsManager().handleRequest(request, out);
                 break;
             default:
                 throw new IllegalArgumentException("No such method name found " + parts[0]);

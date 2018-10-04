@@ -5,6 +5,7 @@ import Server.Interface.IResourceManager;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.Arrays;
 import java.util.Vector;
 
 public class ClientSideResourceManager implements IResourceManager {
@@ -14,26 +15,6 @@ public class ClientSideResourceManager implements IResourceManager {
     public ClientSideResourceManager(PrintWriter out, BufferedReader in) {
         this.out = out;
         this.in = in;
-    }
-
-    @Override
-    public boolean addFlight(int id, int flightNum, int flightSeats, int flightPrice) {
-        String rpc = "addFlight," + Integer.toString(id) + "," + Integer.toString(flightNum)
-                + "," +  Integer.toString(flightSeats)+ "," +  Integer.toString(flightPrice);
-
-        out.println(rpc);
-
-        return readBooleanResponse();
-    }
-
-    @Override
-    public boolean addCars(int id, String location, int numCars, int price) {
-        String rpc = "addCars," + Integer.toString(id) + "," + location
-                + "," +  Integer.toString(numCars)+ "," +  Integer.toString(price);
-
-        out.println(rpc);
-
-        return readBooleanResponse();
     }
 
     private boolean readBooleanResponse() {
@@ -74,9 +55,29 @@ public class ClientSideResourceManager implements IResourceManager {
     }
 
     @Override
+    public boolean addFlight(int id, int flightNum, int flightSeats, int flightPrice) {
+        String rpc = "addFlight," + Integer.toString(id) + "," + Integer.toString(flightNum)
+                + "," + Integer.toString(flightSeats) + "," + Integer.toString(flightPrice);
+
+        out.println(rpc);
+
+        return readBooleanResponse();
+    }
+
+    @Override
+    public boolean addCars(int id, String location, int numCars, int price) {
+        String rpc = "addCars," + Integer.toString(id) + "," + location
+                + "," + Integer.toString(numCars) + "," + Integer.toString(price);
+
+        out.println(rpc);
+
+        return readBooleanResponse();
+    }
+
+    @Override
     public boolean addRooms(int id, String location, int numRooms, int price) {
         String rpc = "addRooms," + Integer.toString(id) + "," + location
-                + "," +  Integer.toString(numRooms)+ "," +  Integer.toString(price);
+                + "," + Integer.toString(numRooms) + "," + Integer.toString(price);
 
         out.println(rpc);
 
@@ -88,16 +89,20 @@ public class ClientSideResourceManager implements IResourceManager {
         String rpc = "newCustomer," + Integer.toString(id);
 
         out.println(rpc);
-
-        return readIntegerResponse();
+        readBooleanResponse();
+        readBooleanResponse();
+        readBooleanResponse();
+        return 0;
     }
 
     @Override
     public boolean newCustomer(int id, int cid) {
-        String rpc = "newCustomer," + Integer.toString(id) + "," + Integer.toString(cid);
+        String rpc = "newCustomerID," + Integer.toString(id) + "," + Integer.toString(cid);
 
         out.println(rpc);
 
+        readBooleanResponse();
+        readBooleanResponse();
         return readBooleanResponse();
     }
 
@@ -168,7 +173,22 @@ public class ClientSideResourceManager implements IResourceManager {
         String rpc = "queryCustomerInfo," + Integer.toString(id) + "," + Integer.toString(customerID);
         out.println(rpc);
 
-        return readStringResponse();
+        String bill1 = String.join("\n", readStringResponse().split(","));
+        if (!bill1.equals(""))
+            bill1 += "\n";
+
+        String bill2 = String.join("\n", readStringResponse().split(","));
+        if (!bill2.equals(""))
+            bill2 += "\n";
+
+        String bill3 = String.join("\n", readStringResponse().split(","));
+        if (!bill3.equals(""))
+            bill3 += "\n";
+
+        if (bill1 == "" && bill2 == "" && bill3 == "")
+            return "";
+        String bill = "Bill for customer " + customerID + "\n" + bill1 + bill2 + bill3;
+        return bill;
     }
 
     @Override
@@ -194,6 +214,7 @@ public class ClientSideResourceManager implements IResourceManager {
 
         return readIntegerResponse();
     }
+
 
     @Override
     public boolean reserveFlight(int id, int customerID, int flightNumber) {
@@ -221,31 +242,56 @@ public class ClientSideResourceManager implements IResourceManager {
 
     @Override
     public boolean bundle(int id, int customerID, Vector<String> flightNumbers, String location, boolean car, boolean room) {
+        // 'Nearly' atomic, will check all conditions before executing.
 
-        boolean rc = true;
+        // Must check if customer exists
+        if (queryCustomerInfo(id, customerID) == "")
+            return false;
 
-        for(String flightNum : flightNumbers){
-            String flight = "reserveFlight," + Integer.toString(id) + "," + Integer.toString(customerID) + "," + flightNum;
-            out.println(flight);
-            rc = readBooleanResponse() && rc;
+        boolean can_reserve = true;
+
+        for (String flightNum : flightNumbers) {
+            try {
+                can_reserve = can_reserve && (queryFlight(id, Integer.parseInt(flightNum)) > 0);
+            } catch (NumberFormatException e) {
+                e.printStackTrace();
+                System.out.println("Flightnum " + flightNum + " is not a number!");
+                System.exit(1);
+            }
         }
 
-        if(car){
-            String rpc = "reserveCar," + Integer.toString(id) + "," + Integer.toString(customerID) + "," + location;
-            out.println(rpc);
-
-            rc = readBooleanResponse() && rc;
+        if (car) {
+            can_reserve = (queryCars(id, location) > 0) && can_reserve;
         }
 
-        if(room){
-            String rpc = "reserveRoom," + Integer.toString(id) + "," + Integer.toString(customerID) + "," + location;
-            out.println(rpc);
-
-            rc = readBooleanResponse() && rc;
+        if (room) {
+            can_reserve = (queryRooms(id, location) > 0) && can_reserve;
         }
 
-        return rc;
+        boolean res = false;
+        if (can_reserve) {
+            res = true;
 
+            for (String flightNum : flightNumbers) {
+                try {
+                    res = reserveFlight(id, customerID, Integer.parseInt(flightNum)) && res;
+                } catch (NumberFormatException e) {
+                    e.printStackTrace();
+                    System.out.println("Flightnum " + flightNum + " is not a number!");
+                    System.exit(1);
+                }
+            }
+
+            if (car) {
+                res = reserveCar(id, customerID, location) && res;
+            }
+
+            if (room) {
+                res = reserveRoom(id, customerID, location) && res;
+            }
+        }
+
+        return res;
     }
 
     @Override

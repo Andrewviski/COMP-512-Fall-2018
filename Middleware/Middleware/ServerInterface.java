@@ -44,27 +44,9 @@ public class ServerInterface {
 
     public void handleRequest(String request, PrintWriter clientOut)
     {
-        queue.add(new ServerRequest(request, clientOut));
+        ServerRequest r=new ServerRequest(request, clientOut);
+        sendRequestToServer(r.request);
+        String response = readReplyFromServer();
+        clientOut.println(response);
     }
-
-    public void startProcessing()
-    {
-        new Thread(() -> {
-            while(true){
-                try {
-                    ServerRequest request = queue.take();
-                    sendRequestToServer(request.request);
-                    String response = readReplyFromServer();
-
-                    request.clientOut.println(response);
-
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-
-        }).start();
-    }
-
-    
 }

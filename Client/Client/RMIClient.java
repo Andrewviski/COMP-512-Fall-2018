@@ -57,11 +57,8 @@ public class RMIClient extends Client {
 
     public void connectServer() {
         try {
-            System.out.println("getting socket");
             Socket echoSocket = new Socket(middlewareHostname, middleware_port);
-            System.out.println("getting PrintWriter");
             PrintWriter out = new PrintWriter(echoSocket.getOutputStream(), true);
-            System.out.println("getting BufferedReader");
             BufferedReader in = new BufferedReader(
                     new InputStreamReader(echoSocket.getInputStream()));
             resourceManager = new ClientSideResourceManager(out, in);
