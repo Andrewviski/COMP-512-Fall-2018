@@ -168,8 +168,6 @@ public class ServerSideResourceManager extends ResourceManager {
                 out.println(boolean_return);
                 break;
 
-            case "bundle":
-
             case "getName":
                 string_return = getName();
                 out.println(string_return);

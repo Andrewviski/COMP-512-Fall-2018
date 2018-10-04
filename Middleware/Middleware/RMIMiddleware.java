@@ -157,9 +157,37 @@ public class RMIMiddleware {
             case "queryCustomerInfo":
                 GetCustomersManager().handleRequest(request, out);
                 break;
+            case "bundle":
+                String[] flightNums = parts[3].split(" ");
+
+                for(String flightNum : flightNums){
+                    String single_request = "ReserveFlight," + parts[1] + "," + parts[2] + "," + flightNum;
+                    GetFlightsManager().handleRequest(single_request, out);
+                }
+
+                if(parts[5] == "1"){
+                    String car_request = "ReserveCar," + parts[1] + "," + parts[2] + "," + parts[4];
+                    GetCarsManager().handleRequest(car_request, out);
+                }
+
+                if(parts[6] == "1"){
+                    String car_request = "ReserveRoom," + parts[1] + "," + parts[2] + "," + parts[4];
+                    GetRoomsManager().handleRequest(request, out);
+                }
+
+                break;
             default:
                 throw new IllegalArgumentException("No such method name found " + parts[0]);
         }
+    }
+
+    public static boolean isNumeric(String strNum) {
+        try {
+            double d = Double.parseDouble(strNum);
+        } catch (NumberFormatException | NullPointerException nfe) {
+            return false;
+        }
+        return true;
     }
 
 
