@@ -213,7 +213,7 @@ public class ClientSideResourceManager implements IResourceManager {
 
     @Override
     public boolean reserveRoom(int id, int customerID, String location) {
-        String rpc = "reserveCar," + Integer.toString(id) + "," + Integer.toString(customerID) + "," + location;
+        String rpc = "reserveRoom," + Integer.toString(id) + "," + Integer.toString(customerID) + "," + location;
         out.println(rpc);
 
         return readBooleanResponse();
@@ -221,11 +221,31 @@ public class ClientSideResourceManager implements IResourceManager {
 
     @Override
     public boolean bundle(int id, int customerID, Vector<String> flightNumbers, String location, boolean car, boolean room) {
-        String rpc = "bundle," + Integer.toString(id) + "," + Integer.toString(customerID) + ",[" + String.join(" ", flightNumbers)
-                + "]," + location + "," + String.valueOf(car) + "," + String.valueOf(room);
-        out.println(rpc);
 
-        return readBooleanResponse();
+        boolean rc = true;
+
+        for(String flightNum : flightNumbers){
+            String flight = "reserveFlight," + Integer.toString(id) + "," + Integer.toString(customerID) + "," + flightNum;
+            out.println(flight);
+            rc = readBooleanResponse() && rc;
+        }
+
+        if(car){
+            String rpc = "reserveCar," + Integer.toString(id) + "," + Integer.toString(customerID) + "," + location;
+            out.println(rpc);
+
+            rc = readBooleanResponse() && rc;
+        }
+
+        if(room){
+            String rpc = "reserveRoom," + Integer.toString(id) + "," + Integer.toString(customerID) + "," + location;
+            out.println(rpc);
+
+            rc = readBooleanResponse() && rc;
+        }
+
+        return rc;
+
     }
 
     @Override
