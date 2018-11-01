@@ -155,10 +155,10 @@ public abstract class Client
 
 				if (resourceManager.newCustomer(id, customerID)) {
 					System.out.println("Add customer ID: " + customerID);
-					return customerID;
+					return true;
 				} else {
 					System.out.println("Customer could not be added");
-					return null;
+					return false;
 				}
 			}
 			case DeleteFlight: {
@@ -389,8 +389,9 @@ public abstract class Client
 				{
 					System.out.println("-Flight Number: " + arguments.get(3+i));
 				}
-				System.out.println("-Car Location: " + arguments.get(arguments.size()-2));
-				System.out.println("-Room Location: " + arguments.get(arguments.size()-1));
+				System.out.println("-Location for Car/Room: " + arguments.get(arguments.size()-3));
+				System.out.println("-Book Car: " + arguments.get(arguments.size()-2));
+				System.out.println("-Book Room: " + arguments.get(arguments.size()-1));
 
 				int id = toInt(arguments.get(1));
 				int customerID = toInt(arguments.get(2));
@@ -420,6 +421,7 @@ public abstract class Client
 		}
 		return null;
 	}
+
 	public void execute(Command cmd, List<String> arguments) throws NumberFormatException
 	{
 		switch (cmd)
@@ -744,8 +746,9 @@ public abstract class Client
 				{
 					System.out.println("-Flight Number: " + arguments.get(3+i));
 				}
-				System.out.println("-Car Location: " + arguments.get(arguments.size()-2));
-				System.out.println("-Room Location: " + arguments.get(arguments.size()-1));
+				System.out.println("-Location for Car/Room: " + arguments.get(arguments.size()-3));
+				System.out.println("-Book Car: " + arguments.get(arguments.size()-2));
+				System.out.println("-Book Room: " + arguments.get(arguments.size()-1));
 
 				int id = toInt(arguments.get(1));
 				int customerID = toInt(arguments.get(2));
@@ -802,6 +805,6 @@ public abstract class Client
 
 	public static boolean toBoolean(String string)// throws Exception
 	{
-		return (new Boolean(string)).booleanValue();
+		return ((string.equals("1"))?true:false);
 	}
 }

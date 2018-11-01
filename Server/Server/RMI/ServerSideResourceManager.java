@@ -12,24 +12,24 @@ import java.net.Socket;
 public class ServerSideResourceManager extends ResourceManager {
     private static String name = "Server";
     private static String s_rmiPrefix = "group16_";
-    private static int port=54000;
+    private static int port = 54000;
 
     private static void ReportServerError(String msg, Exception e) {
-        System.err.println((char) 27 + "[31;1mServer exception: " + (char) 27 + "[0m" + msg+" ]");
+        System.err.println((char) 27 + "[31;1mServer exception: " + (char) 27 + "[0m" + msg + " ]");
         e.printStackTrace();
         System.exit(1);
     }
 
-    private static void parseConfig(String[] args){
-        if (args.length > 2 || args.length < 1 ) {
-            ReportServerError("Usage: java client.RMIClient [port] [servername]",null);
+    private static void parseConfig(String[] args) {
+        if (args.length > 2 || args.length < 1) {
+            ReportServerError("Usage: java client.RMIClient [port] [servername]", null);
         }
 
         if (args.length > 0) {
             try {
                 port = Integer.parseInt(args[0]);
-            }catch(NumberFormatException e){
-                ReportServerError("Port is not a number, please try again!",e);
+            } catch (NumberFormatException e) {
+                ReportServerError("Port is not a number, please try again!", e);
             }
         }
         if (args.length > 1) {
@@ -50,20 +50,23 @@ public class ServerSideResourceManager extends ResourceManager {
                     new PrintWriter(clientSocket.getOutputStream(), true);
             BufferedReader in = new BufferedReader(
                     new InputStreamReader(clientSocket.getInputStream()));
-            
+
             while (true) {
 
                 String request = in.readLine();
 
-
-                server.processRequest(request, out);
+                new Thread(() -> {
+                    server.processRequest(request, out);
+                }).start();
             }
         } catch (Exception e) {
-            ReportServerError("Uncaught exception",e);
+            ReportServerError("Uncaught exception", e);
         }
     }
 
     private void processRequest(String request, PrintWriter out) {
+        if(request==null)
+            return;
         String[] parts = request.split(",");
         String methodName = parts[0];
 
@@ -88,14 +91,13 @@ public class ServerSideResourceManager extends ResourceManager {
                 break;
 
             case "newCustomer":
-                if (parts.length == 2) {
-                    int_return = newCustomer(Integer.parseInt(parts[1]));
-                    out.println(int_return);
-                } else if (parts.length == 3) {
-                    boolean_return = newCustomer(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
-                    out.println(boolean_return);
-                }
+                int_return = newCustomer(Integer.parseInt(parts[1]));
+                out.println(int_return);
+                break;
 
+            case "newCustomerID":
+                boolean_return = newCustomer(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+                out.println(boolean_return);
                 break;
 
             case "deleteFlight":
