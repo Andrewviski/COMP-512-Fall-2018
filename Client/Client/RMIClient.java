@@ -1,12 +1,15 @@
 package Client;
 
+import Server.Interface.*;
 
-import java.net.Socket;
-import java.io.*;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.RemoteException;
+import java.rmi.NotBoundException;
 
 public class RMIClient extends Client {
     private static String middlewareHostname = "localhost";
-    private static int middleware_port = 54006;
+    private static int middlewarePort = 54006;
     private static String middlewareName = "Middleware";
 
     private static String s_rmiPrefix = "group16_";
@@ -23,9 +26,9 @@ public class RMIClient extends Client {
 
         if (args.length > 1) {
             try {
-                middleware_port = Integer.parseInt(args[1]);
+                middlewarePort = Integer.parseInt(args[1]);
             } catch (NumberFormatException e) {
-                ReportClientError("Usage: java client.RMIClient [server_hostname] [server_name] [Port]", e);
+                ReportClientError("Usage: java client.RMIClient [middleware_hostname] [Port] [middleware_name]", e);
             }
 
         }
@@ -57,13 +60,25 @@ public class RMIClient extends Client {
 
     public void connectServer() {
         try {
-            Socket echoSocket = new Socket(middlewareHostname, middleware_port);
-            PrintWriter out = new PrintWriter(echoSocket.getOutputStream(), true);
-            BufferedReader in = new BufferedReader(
-                    new InputStreamReader(echoSocket.getInputStream()));
-            resourceManager = new ClientSideResourceManager(out, in);
-        } catch (Exception e) {
-            ReportClientError("Cannot connect to middlware at(" + middlewareHostname + ":" + middleware_port + ")", e);
+            boolean firstAttempt = true;
+            while (true) {
+                try {
+                    Registry registry = LocateRegistry.getRegistry(middlewareHostname, middlewarePort);
+                    resourceManager = (IResourceManager)registry.lookup(s_rmiPrefix + middlewareName);
+                    System.out.println("Connected to middleware server [" + middlewareHostname + ":" + middlewarePort + "/" + s_rmiPrefix + middlewareName + "]");
+                    break;
+                }
+                catch (NotBoundException|RemoteException e) {
+                    if (firstAttempt) {
+                        ReportClientError("Waiting for middleware server [" + middlewareHostname + ":" + middlewarePort + "/" + s_rmiPrefix + middlewareName + "]",e);
+                        firstAttempt = false;
+                    }
+                }
+                Thread.sleep(500);
+            }
+        }
+        catch (Exception e) {
+            ReportClientError("Cannot connect to middlware at(" + middlewareHostname + ":" + middlewarePort + ")", e);
         }
     }
 }

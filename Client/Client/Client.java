@@ -4,6 +4,10 @@ import Server.Interface.*;
 
 import java.util.*;
 import java.io.*;
+import java.rmi.RemoteException;
+import java.rmi.ConnectException;
+import java.rmi.ServerException;
+import java.rmi.UnmarshalException;
 
 
 public abstract class Client
@@ -54,7 +58,7 @@ public abstract class Client
 			}
 		}
 	}
-	public Object executeAndReturn(Command cmd, List<String> arguments) throws NumberFormatException
+	public Object executeAndReturn(Command cmd, List<String> arguments) throws NumberFormatException, RemoteException
 	{
 		switch (cmd)
 		{
@@ -422,7 +426,7 @@ public abstract class Client
 		return null;
 	}
 
-	public void execute(Command cmd, List<String> arguments) throws NumberFormatException
+	public void execute(Command cmd, List<String> arguments) throws NumberFormatException, RemoteException
 	{
 		switch (cmd)
 		{
@@ -805,6 +809,6 @@ public abstract class Client
 
 	public static boolean toBoolean(String string)// throws Exception
 	{
-		return ((string.equals("1"))?true:false);
+		return (new Boolean(string)).booleanValue();
 	}
 }
