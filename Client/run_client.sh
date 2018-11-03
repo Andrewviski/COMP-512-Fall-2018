@@ -1,3 +1,3 @@
-# Usage: ./run_client.sh [server_hostname] [port] [server_rmiobject]
+# Usage: ./run_client.sh [middleware_hostname] [port] [middleware_rmiobject]
 
 java -Djava.security.policy=java.policy -cp ../Server/RMIInterface.jar:. Client.RMIClient $1 $2 $3

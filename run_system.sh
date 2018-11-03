@@ -9,19 +9,6 @@ MACHINES=(open-12.cs.mcgill.ca
 # Kill all processes listeing to the needed ports
 PORTS=(54002 54003 54004 54006)
 
-### NOT NEEDED
-#for i in 0 1 2 3 4
-#do
-#    pid=$(lsof -i:${PORTS[$i]} -t)
-#
-#    if [[ $pid ]]; then
-#        echo 'killing ' $pid
-#        kill -9  $pid > /dev/null 2>&1
-#        sleep .2
-#    fi
-#
-#done
-
 # User dependent - Please Change before running the script
 USER=akaba2
 PASS=`cat cs-password.pass`
