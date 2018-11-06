@@ -1,5 +1,6 @@
 package Middleware;
 
+import LockManager.LockManager;
 import Server.Interface.IResourceManager;
 
 import java.rmi.NotBoundException;

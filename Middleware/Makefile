@@ -12,7 +12,7 @@ FORCE: ;
 	make -C ../Server/ RMIInterface.jar
 
 compile-middleware: ../Server/RMIInterface.jar
-	javac -cp ../Server/RMIInterface.jar Middleware/*.java
+	javac -cp ../Server/RMIInterface.jar ../LockManager/LockManager/LockManager.java Middleware/*.java
 
 clean:
 	rm -f Middleware/*.class
