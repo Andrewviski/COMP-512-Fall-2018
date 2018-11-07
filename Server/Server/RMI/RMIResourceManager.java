@@ -15,7 +15,6 @@ import java.rmi.server.UnicastRemoteObject;
 
 
 public class RMIResourceManager extends ResourceManager {
-    private static Object lock = new Object();
     private static String s_rmiPrefix = "group16_";
     private static String name = "Server";
     private static int port = 54000;

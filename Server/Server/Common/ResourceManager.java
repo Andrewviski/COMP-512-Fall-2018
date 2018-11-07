@@ -14,8 +14,8 @@ import java.rmi.RemoteException;
 public class ResourceManager implements Server.Interface.IResourceManager {
     protected String m_name = "";
     protected RMHashMap m_data = new RMHashMap();
-    protected HashMap<Integer, RMHashMap> tempData = new HashMap<Integer, RMHashMap>();
-    protected HashSet<Integer> aborted = new HashSet<Integer>();
+    protected HashMap<Integer, HashMap<String, RMItem>> writeSets = new HashMap<>();
+    protected HashMap<Integer, HashMap<String, Character>> latestOp = new HashMap<>();
 
     public ResourceManager(String p_name) {
         m_name = p_name;
@@ -23,53 +23,70 @@ public class ResourceManager implements Server.Interface.IResourceManager {
 
     // Reads a data item
     protected RMItem readData(int xid, String key) {
-        if (xid == -1) {
-            synchronized (m_data) {
-                RMItem item = m_data.get(key);
-                if (item != null) {
-                    return (RMItem) item.clone();
-                }
+        // Item has been removed
+        synchronized (latestOp) {
+            if (latestOp.containsKey(xid) && latestOp.get(xid).containsKey(key) && latestOp.get(xid).get(key) == 'd') {
                 return null;
             }
-        } else {
-            synchronized (tempData) {
-                if (!tempData.containsKey(xid))
-                    tempData.put(xid, (RMHashMap) m_data.clone());
-                RMItem item = tempData.get(xid).get(key);
-                if (item != null) {
-                    return (RMItem) item.clone();
-                }
-                return null;
+        }
+
+        // Get the updated version
+        synchronized (writeSets) {
+            if (!writeSets.containsKey(xid))
+                writeSets.put(xid, new HashMap<>());
+            HashMap<String, RMItem> writeSet = writeSets.get(xid);
+            if (writeSet.containsKey(key))
+                return writeSet.get(key);
+        }
+
+        // Get datastore's version.
+        synchronized (m_data) {
+            RMItem item = m_data.get(key);
+            if (item != null) {
+                return (RMItem) item.clone();
             }
+            return null;
         }
     }
 
     // Writes a data item
-    protected void writeData(int xid, String key, RMItem value) {
-        if (xid == -1) {
-            synchronized (m_data) {
-                m_data.put(key, value);
-            }
-        } else {
-            synchronized (tempData) {
-                if (!tempData.containsKey(xid))
-                    tempData.put(xid, (RMHashMap) m_data.clone());
-                tempData.get(xid).put(key, value);
-            }
+    protected void writeData(String key, RMItem value) {
+        synchronized (m_data) {
+            m_data.put(key, value);
+        }
+    }
+
+    protected void writeTempData(int xid, String key, RMItem value) {
+        synchronized (writeSets) {
+            if (!writeSets.containsKey(xid))
+                writeSets.put(xid, new HashMap<>());
+            HashMap<String, RMItem> writeSet = writeSets.get(xid);
+            writeSet.put(key, value);
+
+            //update latest operation to be a write.
+            if (!latestOp.containsKey(xid))
+                latestOp.put(xid, new HashMap<>());
+            latestOp.get(xid).put(key, 'w');
         }
     }
 
     // Remove the item out of storage
-    protected void removeData(int xid, String key) {
-        if (xid == -1) {
-            synchronized (m_data) {
-                m_data.remove(key);
-            }
-        } else {
-            synchronized (tempData) {
-                if (!tempData.containsKey(xid))
-                    tempData.put(xid, (RMHashMap) m_data.clone());
-                tempData.get(xid).remove(key);
+    protected void removeData(String key) {
+        synchronized (m_data) {
+            m_data.remove(key);
+        }
+    }
+
+    protected void removeTempData(int xid, String key) {
+        synchronized (writeSets) {
+            if (writeSets.containsKey(xid)) {
+                HashMap<String, RMItem> writeSet = writeSets.get(xid);
+                writeSet.remove(key);
+
+                //update latest operation to be a remove
+                if (!latestOp.containsKey(xid))
+                    latestOp.put(xid, new HashMap<>());
+                latestOp.get(xid).put(key, 'd');
             }
         }
     }
@@ -84,7 +101,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
             return false;
         } else {
             if (curObj.getReserved() == 0) {
-                removeData(xid, curObj.getKey());
+                removeTempData(xid, curObj.getKey());
                 Trace.info("RM::deleteItem(" + xid + ", " + key + ") item deleted");
                 return true;
             } else {
@@ -138,12 +155,12 @@ public class ResourceManager implements Server.Interface.IResourceManager {
             return false;
         } else {
             customer.reserve(key, location, item.getPrice());
-            writeData(xid, customer.getKey(), customer);
+            writeTempData(xid, customer.getKey(), customer);
 
             // Decrease the number of available items in the storage
             item.setCount(item.getCount() - 1);
             item.setReserved(item.getReserved() + 1);
-            writeData(xid, item.getKey(), item);
+            writeTempData(xid, item.getKey(), item);
 
             Trace.info("RM::reserveItem(" + xid + ", " + customerID + ", " + key + ", " + location + ") succeeded");
             return true;
@@ -158,7 +175,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
         if (curObj == null) {
             // Doesn't exist yet, add it
             Flight newObj = new Flight(flightNum, flightSeats, flightPrice);
-            writeData(xid, newObj.getKey(), newObj);
+            writeTempData(xid, newObj.getKey(), newObj);
             Trace.info("RM::addFlight(" + xid + ") created new flight " + flightNum + ", seats=" + flightSeats + ", price=$" + flightPrice);
         } else {
             // Add seats to existing flight and update the price if greater than zero
@@ -166,7 +183,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
             if (flightPrice > 0) {
                 curObj.setPrice(flightPrice);
             }
-            writeData(xid, curObj.getKey(), curObj);
+            writeTempData(xid, curObj.getKey(), curObj);
             Trace.info("RM::addFlight(" + xid + ") modified existing flight " + flightNum + ", seats=" + curObj.getCount() + ", price=$" + flightPrice);
         }
         return true;
@@ -180,7 +197,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
         if (curObj == null) {
             // Car location doesn't exist yet, add it
             Car newObj = new Car(location, count, price);
-            writeData(xid, newObj.getKey(), newObj);
+            writeTempData(xid, newObj.getKey(), newObj);
             Trace.info("RM::addCars(" + xid + ") created new location " + location + ", count=" + count + ", price=$" + price);
         } else {
             // Add count to existing car location and update price if greater than zero
@@ -188,7 +205,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
             if (price > 0) {
                 curObj.setPrice(price);
             }
-            writeData(xid, curObj.getKey(), curObj);
+            writeTempData(xid, curObj.getKey(), curObj);
             Trace.info("RM::addCars(" + xid + ") modified existing location " + location + ", count=" + curObj.getCount() + ", price=$" + price);
         }
         return true;
@@ -202,7 +219,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
         if (curObj == null) {
             // Room location doesn't exist yet, add it
             Room newObj = new Room(location, count, price);
-            writeData(xid, newObj.getKey(), newObj);
+            writeTempData(xid, newObj.getKey(), newObj);
             Trace.info("RM::addRooms(" + xid + ") created new room location " + location + ", count=" + count + ", price=$" + price);
         } else {
             // Add count to existing object and update price if greater than zero
@@ -210,7 +227,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
             if (price > 0) {
                 curObj.setPrice(price);
             }
-            writeData(xid, curObj.getKey(), curObj);
+            writeTempData(xid, curObj.getKey(), curObj);
             Trace.info("RM::addRooms(" + xid + ") modified existing location " + location + ", count=" + curObj.getCount() + ", price=$" + price);
         }
         return true;
@@ -282,7 +299,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
                 String.valueOf(Calendar.getInstance().get(Calendar.MILLISECOND)) +
                 String.valueOf(Math.round(Math.random() * 100 + 1)));
         Customer customer = new Customer(cid);
-        writeData(xid, customer.getKey(), customer);
+        writeTempData(xid, customer.getKey(), customer);
         Trace.info("RM::newCustomer(" + cid + ") returns ID=" + cid);
         return cid;
     }
@@ -292,7 +309,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
         Customer customer = (Customer) readData(xid, Customer.getKey(customerID));
         if (customer == null) {
             customer = new Customer(customerID);
-            writeData(xid, customer.getKey(), customer);
+            writeTempData(xid, customer.getKey(), customer);
             Trace.info("RM::newCustomer(" + xid + ", " + customerID + ") created a new customer");
             return true;
         } else {
@@ -317,11 +334,11 @@ public class ResourceManager implements Server.Interface.IResourceManager {
                 Trace.info("RM::deleteCustomer(" + xid + ", " + customerID + ") has reserved " + reserveditem.getKey() + " which is reserved " + item.getReserved() + " times and is still available " + item.getCount() + " times");
                 item.setReserved(item.getReserved() - reserveditem.getCount());
                 item.setCount(item.getCount() + reserveditem.getCount());
-                writeData(xid, item.getKey(), item);
+                writeTempData(xid, item.getKey(), item);
             }
 
             // Remove the customer from the storage
-            removeData(xid, customer.getKey());
+            removeTempData(xid, customer.getKey());
             Trace.info("RM::deleteCustomer(" + xid + ", " + customerID + ") succeeded");
             return true;
         }
@@ -353,6 +370,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
      * @throws RemoteException
      */
     public int start() throws RemoteException {
+        // This is handled in the middleware.
         return 0;
     }
 
@@ -363,31 +381,24 @@ public class ResourceManager implements Server.Interface.IResourceManager {
      * @throws TransactionAbortedException
      * @throws InvalidTransactionException
      */
-    public boolean commit(int transactionId) throws RemoteException,
+    public synchronized boolean commit(int transactionId) throws RemoteException,
             TransactionAbortedException, InvalidTransactionException {
+        synchronized (latestOp) {
+            if (!latestOp.containsKey(transactionId))
+                return false;
 
-        if (!tempData.containsKey(transactionId) || aborted.contains(transactionId))
-            return false;
-
-        // update values.
-        RMHashMap h = tempData.get(transactionId);
-        for (String key : h.keySet()) {
-            if (!h.get(key).equals(m_data.get(key))) {
-                m_data.put(key, h.get(key));
+            for (HashMap.Entry<String, Character> entry : latestOp.get(transactionId).entrySet()) {
+                if (entry.getValue() == 'd')
+                    removeData(entry.getKey());
+                else {
+                    synchronized (writeSets) {
+                        writeData(entry.getKey(), writeSets.get(transactionId).get(entry.getKey()));
+                    }
+                }
             }
+            writeSets.remove(transactionId);
+            latestOp.remove(transactionId);
         }
-
-        // Remove values.
-        ArrayList<String> keysToRemove = new ArrayList<>();
-        for (String key : m_data.keySet()) {
-            if (!h.containsKey(key))
-                keysToRemove.add(key);
-        }
-
-        for (String key : keysToRemove) {
-            m_data.remove(key);
-        }
-
         return true;
     }
 
@@ -396,10 +407,10 @@ public class ResourceManager implements Server.Interface.IResourceManager {
      * @throws RemoteException
      * @throws InvalidTransactionException
      */
-    public void abort(int transactionId) throws RemoteException,
+    public synchronized void abort(int transactionId) throws RemoteException,
             InvalidTransactionException {
-        tempData.remove(transactionId);
-        aborted.add(transactionId);
+        writeSets.remove(transactionId);
+        latestOp.remove(transactionId);
     }
 
     /**
@@ -411,7 +422,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
             try {
                 Thread.sleep(3000);
                 System.exit(0);
-            }catch (Exception e){
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         }).start();

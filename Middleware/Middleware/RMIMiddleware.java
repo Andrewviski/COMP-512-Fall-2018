@@ -29,11 +29,11 @@ public class RMIMiddleware implements IResourceManager {
     private static String[] server_hostname = {"localhost", "localhost", "localhost"};
     private static int server_ports[] = {54002, 54003, 54004};
     private static IResourceManager[] resourceManagers = new IResourceManager[SERVER_COUNT];
-    private static HashSet<Integer> aliveCustomerIds=new HashSet<>();
+    private static HashSet<Integer> aliveCustomerIds = new HashSet<>();
     private TranscationsManager txManager;
 
-    RMIMiddleware(){
-        txManager=new TranscationsManager(this);
+    RMIMiddleware() {
+        txManager = new TranscationsManager(this);
     }
 
     // Resource managers accessors.
@@ -50,29 +50,29 @@ public class RMIMiddleware implements IResourceManager {
     }
 
     private static void ReportMiddleWareError(String msg, Exception e) {
-        System.err.println((char) 27 + "[31;1mMiddleware exception: " + (char) 27 + "[0m" + msg+" ]");
+        System.err.println((char) 27 + "[31;1mMiddleware exception: " + (char) 27 + "[0m" + msg + " ]");
         System.exit(1);
     }
 
     public static void main(String args[]) {
         if (args.length != 0 && args.length != SERVER_COUNT && args.length != SERVER_COUNT * 2) {
 
-            ReportMiddleWareError("We got "+Integer.toString(args.length)+ "Args, Usage: java server.Middleware.RMIMiddleware [flights_server_hostname] [rooms_server_hostname] [cars_server_hostname]", null);
+            ReportMiddleWareError("We got " + Integer.toString(args.length) + "Args, Usage: java server.Middleware.RMIMiddleware [flights_server_hostname] [rooms_server_hostname] [cars_server_hostname]", null);
         }
 
         try {
-            RMIMiddleware middleware=new RMIMiddleware();
+            RMIMiddleware middleware = new RMIMiddleware();
             middleware.parseServersConfig(args);
             middleware.setup();
             middleware.connectToServers();
-            System.out.println("Middleware is ready and listening on port "+middlewarePort);
+            System.out.println("Middleware is ready and listening on port " + middlewarePort);
         } catch (Exception e) {
             ReportMiddleWareError("Uncaught Exception", e);
         }
     }
 
     private void parseServersConfig(String args[]) {
-        if(args.length==0)
+        if (args.length == 0)
             return;
         // Parse hostnames and port numbers.
         for (int i = 0; i < SERVER_COUNT; i++) {
@@ -87,7 +87,7 @@ public class RMIMiddleware implements IResourceManager {
         }
     }
 
-    private void setup(){
+    private void setup() {
         // Create the RMI server entry.
         try {
             // Create a new Server object.
@@ -137,51 +137,66 @@ public class RMIMiddleware implements IResourceManager {
             while (true) {
                 try {
                     Registry registry = LocateRegistry.getRegistry(server_host, port);
-                    resourceManagers[resource_manager_index] = (IResourceManager)registry.lookup(s_rmiPrefix + server_name);
+                    resourceManagers[resource_manager_index] = (IResourceManager) registry.lookup(s_rmiPrefix + server_name);
                     System.out.println("Connected to server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_name + "]");
                     break;
-                }
-                catch (NotBoundException |RemoteException e) {
+                } catch (NotBoundException | RemoteException e) {
                     if (firstAttempt) {
-                        ReportMiddleWareError("Waiting for Server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_name + "]",e);
+                        ReportMiddleWareError("Waiting for Server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_name + "]", e);
                         firstAttempt = false;
                     }
                 }
                 Thread.sleep(500);
             }
-        }
-        catch (Exception e) {
-            ReportMiddleWareError("Cannot connect to "+ server_name+" at(" + server_host + ":" + port + ")", e);
+        } catch (Exception e) {
+            ReportMiddleWareError("Cannot connect to " + server_name + " at(" + server_host + ":" + port + ")", e);
         }
     }
 
     public boolean addFlight(int id, int flightNum, int flightSeats, int flightPrice) throws RemoteException, InvalidTransactionException {
-        return txManager.addFlight(id,flightNum,flightSeats,flightPrice);
+        if (!txManager.addFlight(id, flightNum, flightSeats, flightPrice)) {
+            abort(id);
+            return false;
+        }
+        return true;
     }
 
     public boolean addCars(int id, String location, int numCars, int price) throws RemoteException, InvalidTransactionException {
-        return txManager.addCars(id,location,numCars,price);
+        if (txManager.addCars(id, location, numCars, price)) {
+            abort(id);
+            return false;
+        }
+        return true;
     }
 
     public boolean addRooms(int id, String location, int numRooms, int price) throws RemoteException, InvalidTransactionException {
-        return txManager.addRooms(id,location,numRooms,price);
+        if (txManager.addRooms(id, location, numRooms, price)) {
+            abort(id);
+            return false;
+        }
+        return true;
     }
 
     public int newCustomer(int id) throws RemoteException, InvalidTransactionException {
-        return txManager.newCustomer(id);
+        try{
+            txManager.newCustomer(id);
+        } catch (Exception e){
+            abort(id);
+            throw e;
+        }
     }
 
     public boolean newCustomer(int id, int cid) throws RemoteException, InvalidTransactionException {
-        return txManager.newCustomer(id,cid);
+        return txManager.newCustomer(id, cid);
     }
 
     public boolean deleteFlight(int id, int flightNum) throws RemoteException, InvalidTransactionException {
-        return txManager.deleteFlight(id,flightNum);
+        return txManager.deleteFlight(id, flightNum);
     }
 
 
     public boolean deleteCars(int id, String location) throws RemoteException, InvalidTransactionException {
-        return txManager.deleteCars(id,location);
+        return txManager.deleteCars(id, location);
     }
 
 
@@ -191,62 +206,62 @@ public class RMIMiddleware implements IResourceManager {
 
 
     public boolean deleteCustomer(int id, int customerID) throws RemoteException, InvalidTransactionException {
-        return txManager.deleteCustomer(id,customerID);
+        return txManager.deleteCustomer(id, customerID);
     }
 
 
     public int queryFlight(int id, int flightNumber) throws RemoteException, InvalidTransactionException {
-        return txManager.queryFlight(id,flightNumber);
+        return txManager.queryFlight(id, flightNumber);
     }
 
 
     public int queryCars(int id, String location) throws RemoteException, InvalidTransactionException {
-        return txManager.queryCars(id,location);
+        return txManager.queryCars(id, location);
     }
 
 
     public int queryRooms(int id, String location) throws RemoteException, InvalidTransactionException {
-        return txManager.queryRooms(id,location);
+        return txManager.queryRooms(id, location);
     }
 
 
     public String queryCustomerInfo(int id, int customerID) throws RemoteException, InvalidTransactionException {
-        return txManager.queryCustomerInfo(id,customerID);
+        return txManager.queryCustomerInfo(id, customerID);
     }
 
 
     public int queryFlightPrice(int id, int flightNumber) throws RemoteException, InvalidTransactionException {
-        return txManager.queryFlightPrice(id,flightNumber);
+        return txManager.queryFlightPrice(id, flightNumber);
     }
 
 
     public int queryCarsPrice(int id, String location) throws RemoteException, InvalidTransactionException {
-        return txManager.queryCarsPrice(id,location);
+        return txManager.queryCarsPrice(id, location);
     }
 
 
     public int queryRoomsPrice(int id, String location) throws RemoteException, InvalidTransactionException {
-        return txManager.queryRoomsPrice(id,location);
+        return txManager.queryRoomsPrice(id, location);
     }
 
 
     public boolean reserveFlight(int id, int customerID, int flightNumber) throws RemoteException, InvalidTransactionException {
-        return txManager.reserveFlight(id,customerID,flightNumber);
+        return txManager.reserveFlight(id, customerID, flightNumber);
     }
 
 
     public boolean reserveCar(int id, int customerID, String location) throws RemoteException, InvalidTransactionException {
-        return txManager.reserveCar(id,customerID,location);
+        return txManager.reserveCar(id, customerID, location);
     }
 
 
     public boolean reserveRoom(int id, int customerID, String location) throws RemoteException, InvalidTransactionException {
-        return txManager.reserveRoom(id,customerID,location);
+        return txManager.reserveRoom(id, customerID, location);
     }
 
 
     public boolean bundle(int id, int customerID, Vector<String> flightNumbers, String location, boolean car, boolean room) throws RemoteException, InvalidTransactionException {
-        return txManager.bundle(id,customerID,flightNumbers,location,car,room);
+        return txManager.bundle(id, customerID, flightNumbers, location, car, room);
     }
 
     @Override
@@ -256,7 +271,11 @@ public class RMIMiddleware implements IResourceManager {
 
     @Override
     public boolean commit(int transactionId) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        return txManager.commit(transactionId);
+        if(txManager.commit(transactionId)){
+            abort(transactionId);
+            return false;
+        }
+        return true;
     }
 
     @Override
@@ -266,12 +285,12 @@ public class RMIMiddleware implements IResourceManager {
 
     @Override
     public boolean shutdown() throws RemoteException {
-        if(GetFlightsManager().shutdown() && GetCarsManager().shutdown() && GetRoomsManager().shutdown()){
+        if (GetFlightsManager().shutdown() && GetCarsManager().shutdown() && GetRoomsManager().shutdown()) {
             new Thread(() -> {
                 try {
                     Thread.sleep(3000);
                     System.exit(0);
-                }catch (Exception e){
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }).start();
