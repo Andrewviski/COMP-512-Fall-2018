@@ -200,6 +200,7 @@ public interface IResourceManager extends Remote
      */
     public boolean bundle(int id, int customerID, Vector<String> flightNumbers, String location, boolean car, boolean room)
             throws RemoteException;
+
     /**
      * Convenience for probing the resource manager.
      *

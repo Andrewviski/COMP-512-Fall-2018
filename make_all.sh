@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 
-cd LockManager/
+cd Server/
 make
-
-cd ../Server/
-make
-
 cd ../Middleware/
 make
-
 cd ../Client/
 make
