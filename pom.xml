@@ -21,7 +21,6 @@
         </plugins>
     </build>
     <modules>
-        <module>Middleware</module>
     </modules>
     <dependencies>
         <dependency>
