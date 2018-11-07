@@ -2,7 +2,7 @@ all: java.policy compile-client
 
 java.policy: FORCE
 	@echo "Creating client java policy"
-	@echo "grant codebase \"file:`pwd`/\" {" > java.policy
+	@echo "grant {" > java.policy
 	@echo "permission java.security.AllPermission;" >> java.policy
 	@echo "};" >> java.policy
 

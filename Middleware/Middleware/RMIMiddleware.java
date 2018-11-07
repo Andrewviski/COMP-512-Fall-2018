@@ -1,6 +1,8 @@
 package Middleware;
 
+import LockManager.TransactionAbortedException;
 import Server.Interface.IResourceManager;
+import Server.RMI.RMIResourceManager;
 
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -13,7 +15,7 @@ import java.util.HashSet;
 import java.util.Vector;
 
 public class RMIMiddleware implements IResourceManager {
-    
+
     private static String middlwareName = "Middleware";
     private static String s_rmiPrefix = "group16_";
 
@@ -28,6 +30,11 @@ public class RMIMiddleware implements IResourceManager {
     private static int server_ports[] = {54002, 54003, 54004};
     private static IResourceManager[] resourceManagers = new IResourceManager[SERVER_COUNT];
     private static HashSet<Integer> aliveCustomerIds=new HashSet<>();
+    private TranscationsManager txManager;
+
+    RMIMiddleware(){
+        txManager=new TranscationsManager(this);
+    }
 
     // Resource managers accessors.
     public IResourceManager GetFlightsManager() {
@@ -144,153 +151,144 @@ public class RMIMiddleware implements IResourceManager {
             }
         }
         catch (Exception e) {
-            ReportMiddleWareError("Cannot connect to Server at(" + server_host + ":" + port + ")", e);
+            ReportMiddleWareError("Cannot connect to "+ server_name+" at(" + server_host + ":" + port + ")", e);
         }
     }
-    
-    public boolean addFlight(int id, int flightNum, int flightSeats, int flightPrice) throws RemoteException {
-        return GetFlightsManager().addFlight(id,flightNum,flightSeats,flightPrice);
-    }
-    
-    public boolean addCars(int id, String location, int numCars, int price) throws RemoteException {
-        return GetCarsManager().addCars(id,location,numCars,price);
-    }
-    
-    public boolean addRooms(int id, String location, int numRooms, int price) throws RemoteException {
-        return GetRoomsManager().addRooms(id,location,numRooms,price);
-    }
-    
-    public int newCustomer(int id) throws RemoteException {
-        int newCid=Integer.parseInt(String.valueOf(id) +
-                String.valueOf(Calendar.getInstance().get(Calendar.MILLISECOND)) +
-                String.valueOf(Math.round(Math.random() * 100 + 1)));
-        if(newCustomer(id,newCid))
-            return newCid;
 
-        // 0 Indicates failure.
-        return 0;
+    public boolean addFlight(int id, int flightNum, int flightSeats, int flightPrice) throws RemoteException, InvalidTransactionException {
+        return txManager.addFlight(id,flightNum,flightSeats,flightPrice);
     }
-    
-    public boolean newCustomer(int id, int cid) throws RemoteException {
-        if(GetRoomsManager().newCustomer(id,cid) && GetCarsManager().newCustomer(id,cid) && GetFlightsManager().newCustomer(id,cid)){
-            aliveCustomerIds.add(cid);
-            return true;
+
+    public boolean addCars(int id, String location, int numCars, int price) throws RemoteException, InvalidTransactionException {
+        return txManager.addCars(id,location,numCars,price);
+    }
+
+    public boolean addRooms(int id, String location, int numRooms, int price) throws RemoteException, InvalidTransactionException {
+        return txManager.addRooms(id,location,numRooms,price);
+    }
+
+    public int newCustomer(int id) throws RemoteException, InvalidTransactionException {
+        return txManager.newCustomer(id);
+    }
+
+    public boolean newCustomer(int id, int cid) throws RemoteException, InvalidTransactionException {
+        return txManager.newCustomer(id,cid);
+    }
+
+    public boolean deleteFlight(int id, int flightNum) throws RemoteException, InvalidTransactionException {
+        return txManager.deleteFlight(id,flightNum);
+    }
+
+
+    public boolean deleteCars(int id, String location) throws RemoteException, InvalidTransactionException {
+        return txManager.deleteCars(id,location);
+    }
+
+
+    public boolean deleteRooms(int id, String location) throws RemoteException, InvalidTransactionException {
+        return txManager.deleteRooms(id, location);
+    }
+
+
+    public boolean deleteCustomer(int id, int customerID) throws RemoteException, InvalidTransactionException {
+        return txManager.deleteCustomer(id,customerID);
+    }
+
+
+    public int queryFlight(int id, int flightNumber) throws RemoteException, InvalidTransactionException {
+        return txManager.queryFlight(id,flightNumber);
+    }
+
+
+    public int queryCars(int id, String location) throws RemoteException, InvalidTransactionException {
+        return txManager.queryCars(id,location);
+    }
+
+
+    public int queryRooms(int id, String location) throws RemoteException, InvalidTransactionException {
+        return txManager.queryRooms(id,location);
+    }
+
+
+    public String queryCustomerInfo(int id, int customerID) throws RemoteException, InvalidTransactionException {
+        return txManager.queryCustomerInfo(id,customerID);
+    }
+
+
+    public int queryFlightPrice(int id, int flightNumber) throws RemoteException, InvalidTransactionException {
+        return txManager.queryFlightPrice(id,flightNumber);
+    }
+
+
+    public int queryCarsPrice(int id, String location) throws RemoteException, InvalidTransactionException {
+        return txManager.queryCarsPrice(id,location);
+    }
+
+
+    public int queryRoomsPrice(int id, String location) throws RemoteException, InvalidTransactionException {
+        return txManager.queryRoomsPrice(id,location);
+    }
+
+
+    public boolean reserveFlight(int id, int customerID, int flightNumber) throws RemoteException, InvalidTransactionException {
+        return txManager.reserveFlight(id,customerID,flightNumber);
+    }
+
+
+    public boolean reserveCar(int id, int customerID, String location) throws RemoteException, InvalidTransactionException {
+        return txManager.reserveCar(id,customerID,location);
+    }
+
+
+    public boolean reserveRoom(int id, int customerID, String location) throws RemoteException, InvalidTransactionException {
+        return txManager.reserveRoom(id,customerID,location);
+    }
+
+
+    public boolean bundle(int id, int customerID, Vector<String> flightNumbers, String location, boolean car, boolean room) throws RemoteException, InvalidTransactionException {
+        return txManager.bundle(id,customerID,flightNumbers,location,car,room);
+    }
+
+    @Override
+    public int start() throws RemoteException {
+        return txManager.start();
+    }
+
+    @Override
+    public boolean commit(int transactionId) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        return txManager.commit(transactionId);
+    }
+
+    @Override
+    public void abort(int transactionId) throws RemoteException, InvalidTransactionException {
+        txManager.abort(transactionId);
+    }
+
+    @Override
+    public boolean shutdown() throws RemoteException {
+        if(GetFlightsManager().shutdown() && GetCarsManager().shutdown() && GetRoomsManager().shutdown()){
+            new Thread(() -> {
+                try {
+                    Thread.sleep(3000);
+                    System.exit(0);
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
+            }).start();
         }
+        return true;
+    }
+
+    @Override
+    public boolean readyToCommit() throws RemoteException {
+        // Middleware is never ready to commit.
         return false;
     }
-    
-    public boolean deleteFlight(int id, int flightNum) throws RemoteException {
-        return GetFlightsManager().deleteFlight(id,flightNum);
-    }
 
-    
-    public boolean deleteCars(int id, String location) throws RemoteException {
-        return GetCarsManager().deleteCars(id,location);
-    }
 
-    
-    public boolean deleteRooms(int id, String location) throws RemoteException {
-        return GetRoomsManager().deleteRooms(id, location);
-    }
-
-    
-    public boolean deleteCustomer(int id, int customerID) throws RemoteException {
-        return (GetRoomsManager().deleteCustomer(id,customerID) && GetCarsManager().deleteCustomer(id,customerID) &&GetFlightsManager().deleteCustomer(id,customerID));
-    }
-
-    
-    public int queryFlight(int id, int flightNumber) throws RemoteException {
-        return GetFlightsManager().queryFlight(id,flightNumber);
-    }
-
-    
-    public int queryCars(int id, String location) throws RemoteException {
-        return GetCarsManager().queryCars(id,location);
-    }
-
-    
-    public int queryRooms(int id, String location) throws RemoteException {
-        return GetRoomsManager().queryRooms(id,location);
-    }
-
-    
-    public String queryCustomerInfo(int id, int customerID) throws RemoteException {
-        return GetFlightsManager().queryCustomerInfo(id,customerID) + GetRoomsManager().queryCustomerInfo(id,customerID) + GetCarsManager().queryCustomerInfo(id,customerID);
-    }
-
-    
-    public int queryFlightPrice(int id, int flightNumber) throws RemoteException {
-        return GetFlightsManager().queryFlightPrice(id,flightNumber);
-    }
-
-    
-    public int queryCarsPrice(int id, String location) throws RemoteException {
-        return GetCarsManager().queryCarsPrice(id,location);
-    }
-
-    
-    public int queryRoomsPrice(int id, String location) throws RemoteException {
-        return GetRoomsManager().queryRoomsPrice(id,location);
-    }
-
-    
-    public boolean reserveFlight(int id, int customerID, int flightNumber) throws RemoteException {
-        return GetFlightsManager().reserveFlight(id,customerID,flightNumber);
-    }
-
-    
-    public boolean reserveCar(int id, int customerID, String location) throws RemoteException {
-        return GetCarsManager().reserveCar(id,customerID,location);
-    }
-
-    
-    public boolean reserveRoom(int id, int customerID, String location) throws RemoteException {
-        return GetRoomsManager().reserveRoom(id,customerID,location);
-    }
-
-    
-    public boolean bundle(int id, int customerID, Vector<String> flightNumbers, String location, boolean car, boolean room) throws RemoteException {
-        // Need to implement transactions.
-        if(car && GetCarsManager().queryCars(id,location)==0)
-            return false;
-        if(room && GetRoomsManager().queryRooms(id,location)==0)
-            return false;
-
-        for(String flightIdString:flightNumbers) {
-            try {
-                int flightId = Integer.parseInt(flightIdString);
-                if (GetFlightsManager().queryFlight(id, flightId) == 0) {
-                    return false;
-                }
-            } catch (NumberFormatException e) {
-                System.err.println("FlightId " + flightIdString + " is not a number!\n");
-                return false;
-            }
-        }
-        Boolean passing = true;
-        if(car)
-            passing &= GetCarsManager().reserveCar(id, customerID, location);
-
-        if(room)
-            passing &=GetRoomsManager().reserveRoom(id, customerID, location);
-
-        for(String flightIdString:flightNumbers) {
-            try {
-                int flightId = Integer.parseInt(flightIdString);
-                passing &= GetFlightsManager().reserveFlight(id,customerID,flightId);
-            } catch (NumberFormatException e) {
-                System.err.println("FlightId " + flightIdString + " is not a number!\n");
-                return false;
-            }
-        }
-        return passing;
-    }
-
-    
     public String getName() throws RemoteException {
         return middlwareName;
     }
 }
-
 
 

@@ -140,14 +140,14 @@ public class Tester {
                 List<String> command_args = Arrays.asList(request.getCommand().split(","));
                 Command command = Command.fromString(command_args.get(0));
                 try {
-                    if (!tester_client.executeAndReturn(command, command_args).equals(request.getResponse())) {
+                    if (!tester_client.execute(command, command_args).equals(request.getResponse())) {
                         System.out.println(request.toString() + "...... Failed!");
                         System.exit(1);
                     } else {
                         System.out.println(request.toString() + "...... Passed!");
                     }
                 } catch(Exception e){
-                    System.err.println("Tester crashed, printing stacktrace...");
+                    System.err.println("Client.Tester crashed, printing stacktrace...");
                     e.printStackTrace();
                 }
             }
