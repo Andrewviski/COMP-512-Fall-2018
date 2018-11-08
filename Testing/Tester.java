@@ -2,6 +2,7 @@ import Client.Command;
 import Client.RMIClient;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 class TestCommand<ResponseType extends Object> {
     public String command;
@@ -35,7 +36,7 @@ class TestCommand<ResponseType extends Object> {
 }
 
 public class Tester {
-    static RMIClient SetUp(String args[]) {
+    static RMIClient Spawn(String args[]) {
         // Get a client.
         RMIClient tester_client = new RMIClient();
         tester_client.ParseMiddlewareServerConfig(args);
@@ -48,14 +49,22 @@ public class Tester {
 
     static void TearDown(RMIClient client) {
         try {
-            client.execute(Command.fromString("shutdown"), Arrays.asList("shutdown"));
+            client.execute(Command.fromString("quit"), Arrays.asList("quit"));
         } catch (Exception e) {
             System.err.println("TearDown crashed!");
             e.printStackTrace();
         }
     }
-
-    List<TestCommand<?>> AddCommandsConstructor(int xid, List<String> flights, List<String> cars, List<String> rooms, List<String> customers) {
+    static int generateXid(RMIClient client){
+        try {
+            return  (int) client.execute(Command.fromString("start"), Arrays.asList("start"));
+        } catch (Exception e) {
+            System.err.println("MileStone1Test crashed!");
+            e.printStackTrace();
+            return -1;
+        }
+    }
+    static List<TestCommand<?>> AddCommandsConstructor(int xid, List<String> flights, List<String> cars, List<String> rooms, List<String> customers) {
         List<TestCommand<?>> commands = new ArrayList<TestCommand<?>>();
         for (String s : flights)
             commands.add(new TestCommand<Boolean>("AddFlight," + xid + "," + s, true));
@@ -68,7 +77,7 @@ public class Tester {
         return commands;
     }
 
-    List<TestCommand<?>> ReserveCommandsConstructor(int xid, List<String> flights, List<String> cars, List<String> rooms, List<String> customers) {
+    static List<TestCommand<?>> ReserveCommandsConstructor(int xid, List<String> flights, List<String> cars, List<String> rooms, List<String> customers) {
         List<TestCommand<?>> commands = new ArrayList<TestCommand<?>>();
         for (String s : flights)
             commands.add(new TestCommand<Boolean>("ReserveFlight," + xid + "," + s, true));
@@ -79,7 +88,7 @@ public class Tester {
         return commands;
     }
 
-    List<TestCommand<?>> DeleteCommandsConstructor(int xid, List<String> flights, List<String> cars, List<String> rooms, List<String> customers) {
+    static List<TestCommand<?>> DeleteCommandsConstructor(int xid, List<String> flights, List<String> cars, List<String> rooms, List<String> customers) {
         List<TestCommand<?>> commands = new ArrayList<TestCommand<?>>();
         for (String s : flights)
             commands.add(new TestCommand<Boolean>("DeleteFlight," + xid + "," + s, true));
@@ -92,7 +101,7 @@ public class Tester {
         return commands;
     }
 
-    List<TestCommand<?>> QueryCommandsConstructor(int xid, List<Map.Entry<String, Integer>> flights, List<Map.Entry<String, Integer>> cars, List<Map.Entry<String, Integer>> rooms, List<Map.Entry<String, String>> customers) {
+    static List<TestCommand<?>> QueryCommandsConstructor(int xid, List<Map.Entry<String, Integer>> flights, List<Map.Entry<String, Integer>> cars, List<Map.Entry<String, Integer>> rooms, List<Map.Entry<String, String>> customers) {
         List<TestCommand<?>> commands = new ArrayList<TestCommand<?>>();
         for (Map.Entry<String, Integer> e : flights)
             commands.add(new TestCommand<Integer>("QueryFlight," + xid + "," + e.getKey(), e.getValue()));
@@ -105,7 +114,7 @@ public class Tester {
         return commands;
     }
 
-    List<TestCommand<?>> QueryPriceCommandsConstructor(int xid, List<Map.Entry<String, Integer>> flights, List<Map.Entry<String, Integer>> cars, List<Map.Entry<String, Integer>> rooms) {
+    static List<TestCommand<?>> QueryPriceCommandsConstructor(int xid, List<Map.Entry<String, Integer>> flights, List<Map.Entry<String, Integer>> cars, List<Map.Entry<String, Integer>> rooms) {
         List<TestCommand<?>> commands = new ArrayList<TestCommand<?>>();
         for (Map.Entry<String, Integer> e : flights)
             commands.add(new TestCommand<Integer>("QueryFlightPrice," + xid + "," + e.getKey(), e.getValue()));
@@ -116,21 +125,30 @@ public class Tester {
         return commands;
     }
 
-    List<TestCommand<?>> MileStone1Test(RMIClient client) {
+    static List<TestCommand<?>> AllServersDataAddingStressTest(RMIClient client) {
         List<TestCommand<?>> commands = new ArrayList<TestCommand<?>>();
-        int xid;
-        try {
-            xid = (int) client.execute(Command.fromString("start"), Arrays.asList("start"));
-        } catch (Exception e) {
-            System.err.println("MileStone1Test crashed!");
-            e.printStackTrace();
-            return commands;
-        }
+        int xid=generateXid(client);
+        List<String> flights=Arrays.asList("1,1,1","2,2,2","3,3,3");
+        List<String> cars=Arrays.asList("montreal,1,1","paris,2,2","ottawa,3,3");
+        List<String> rooms=Arrays.asList("montreal,1,1","paris,2,2","ottawa,3,3");
+        List<String> customers=Arrays.asList("1","11","111");
+        List<TestCommand<?>> temp= AddCommandsConstructor(xid,flights,cars,rooms,customers);
+        temp.add(new TestCommand<Boolean>("Commit," + xid, true));
+        return temp;
+    }
+
+    static List<TestCommand<?>>  MileStone1Test(RMIClient client){
+        List<TestCommand<?>> commands = new ArrayList<TestCommand<?>>();
+        int xid=generateXid(client);
         // 1. Adding data + Distribution
         commands.add(new TestCommand<Boolean>("AddFlight," + xid + ",1,3,10", true));
         commands.add(new TestCommand<Boolean>("AddCars," + xid + ",Montreal,5,20", true));
         commands.add(new TestCommand<Boolean>("AddRooms," + xid + ",Montreal,1,100", true));
+        try {
+            TimeUnit.MILLISECONDS.sleep(900);
+        }catch (Exception e){
 
+        }
 
         // 2. Querying data + Distribution
         commands.add(new TestCommand<Integer>("QueryFlight," + xid + ",1", 3));
@@ -179,7 +197,10 @@ public class Tester {
     }
 
     boolean RunGenericTest(RMIClient tester_client, List<TestCommand<?>> test) {
-        for (TestCommand<?> test_command : test) {
+        Random rand = new Random();
+        for (int i=0;i<test.size();i++) {
+            //TestCommand test_command=test.get(rand.nextInt(test.size()-1));
+            TestCommand test_command=test.get(i);
             if (!test_command.Verify(tester_client)) {
                 System.out.println(test_command.command + "...... Failed!");
                 return false;
@@ -190,10 +211,16 @@ public class Tester {
         return true;
     }
 
+    void StressTest(String[] args,int NClients){
+        for(int i=0;i<NClients;i++){
+            new Thread(() -> {
+                RMIClient tester_client=Spawn(args);
+                RunGenericTest(tester_client,AllServersDataAddingStressTest(tester_client));
+            }).start();
+        }
+    }
     public static void main(String args[]) {
         Tester tester = new Tester();
-        RMIClient tester_client = SetUp(args);
-        tester.RunGenericTest(tester_client, tester.MileStone1Test(tester_client));
-        TearDown(tester_client);
+        tester.StressTest(args,2);
     }
 }
