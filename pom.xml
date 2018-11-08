@@ -35,11 +35,5 @@
             <version>2.22.1</version>
         </dependency>
     </dependencies>
-    <configuration>
-        <forkMode>once</forkMode>
-        <systemProperties>
-            <java.security>{path to the java.security file}</java.security>
-        </systemProperties>
-    </configuration>
 </project>
 
