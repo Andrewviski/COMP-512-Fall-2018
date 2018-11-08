@@ -1,5 +1,6 @@
 package Client;
 
+import LockManager.DeadlockException;
 import LockManager.TransactionAbortedException;
 import Middleware.InvalidTransactionException;
 import Server.Interface.*;
@@ -44,7 +45,8 @@ public abstract class Client {
                     execute(cmd, arguments);
                 }
             } catch (IllegalArgumentException e) {
-                System.err.println((char) 27 + "[31;1mCommand exception: " + (char) 27 + "[0m" + e.getLocalizedMessage());
+                System.err.println((char) 27 + "[31;1mCommand exception: " + (char) 27 + "[0m" + e.getMessage());
+                e.printStackTrace();
             } catch (Exception e) {
                 System.err.println((char) 27 + "[31;1mCommand exception: " + (char) 27 + "[0mUncaught exception");
                 e.printStackTrace();
@@ -457,6 +459,13 @@ public abstract class Client {
             System.out.println(e.getMessage());
         } catch (RemoteException e) {
             System.out.println(e.getMessage());
+        } catch (DeadlockException dle){
+            System.out.println("The transaction "+dle.getXId()+" is deadlocked and aborted.");
+            try {
+                resourceManager.abort(dle.getXId());
+            }catch (Exception e){
+                System.out.println("Cannot abort deadlocked transaction "+ dle.getXId());
+            }
         }
         return null;
     }

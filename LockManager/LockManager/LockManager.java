@@ -277,11 +277,9 @@ public class LockManager {
         return true;
     }
 
-
-
     // Returns true if the lock request on dataObj conflicts with already existing locks. If the lock request is a
     // redundant one (for eg: if a transaction holds a read lock on certain data item and again requests for a read
-    // lock), then this is ignored. This is done by throwing LockManager.RedundantLockRequestException which is handled
+    // lock), then this is ignored. This is done by throwing RedundantLockRequestException which is handled
     // appropriately by the caller. If the lock request is a conversion from READ lock to WRITE lock, then bitset
     // is set.
     private boolean LockConflict(DataLockObject dataLockObject, BitSet bitset) throws DeadlockException, RedundantLockRequestException {
@@ -320,27 +318,28 @@ public class LockManager {
                                 // conflict exists
                                 return true;
                             }
-
-                            bitset.set(0, true);
                         }
+                        bitset.set(0, true);
                     }
-                } else if (dataLockObject.getLockType() == TransactionLockObject.LockType.LOCK_READ) {
-                    if (l_dataLockObject.getLockType() == TransactionLockObject.LockType.LOCK_WRITE) {
-                        // Transaction is requesting a READ lock and some other transaction
-                        // already has a WRITE lock on it ==> conflict
-                        Trace.info("LM::lockConflict(" + dataLockObject.getXId() + ", " + dataLockObject.getDataName() + ") Want READ, someone has WRITE");
-                        return true;
-                    }
-                } else if (dataLockObject.getLockType() == TransactionLockObject.LockType.LOCK_WRITE) {
-                    // Transaction is requesting a WRITE lock and some other transaction has either
-                    // a READ or a WRITE lock on it ==> conflict
-                    Trace.info("LM::lockConflict(" + dataLockObject.getXId() + ", " + dataLockObject.getDataName() + ") Want WRITE, someone has READ or WRITE");
+                }
+            } else if (dataLockObject.getLockType() == TransactionLockObject.LockType.LOCK_READ) {
+                if (l_dataLockObject.getLockType() == TransactionLockObject.LockType.LOCK_WRITE) {
+                    // Transaction is requesting a READ lock and some other transaction
+                    // already has a WRITE lock on it ==> conflict
+                    Trace.info("LM::lockConflict(" + dataLockObject.getXId() + ", " + dataLockObject.getDataName() + ") Want READ, someone has WRITE");
                     return true;
                 }
+            } else if (dataLockObject.getLockType() == TransactionLockObject.LockType.LOCK_WRITE) {
+                // Transaction is requesting a WRITE lock and some other transaction has either
+                // a READ or a WRITE lock on it ==> conflict
+                Trace.info("LM::lockConflict(" + dataLockObject.getXId() + ", " + dataLockObject.getDataName() + ") Want WRITE, someone has READ or WRITE");
+                return true;
             }
         }
+
         // No conflicting lock found, return false
         return false;
+
     }
 
     private void WaitLock(DataLockObject dataLockObject) throws DeadlockException {
