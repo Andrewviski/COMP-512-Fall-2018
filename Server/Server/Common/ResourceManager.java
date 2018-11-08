@@ -5,8 +5,9 @@
 
 package Server.Common;
 
+import LockManager.LockManager;
 import Middleware.InvalidTransactionException;
-import LockManager.TransactionAbortedException;
+import LockManager.*;
 
 import java.util.*;
 import java.rmi.RemoteException;
@@ -16,6 +17,35 @@ public class ResourceManager implements Server.Interface.IResourceManager {
     protected RMHashMap m_data = new RMHashMap();
     protected HashMap<Integer, HashMap<String, RMItem>> writeSets = new HashMap<>();
     protected HashMap<Integer, HashMap<String, Character>> latestOp = new HashMap<>();
+    private LockManager lockManager = new LockManager();
+
+    private void Xlock(int id, String name) {
+        try {
+            lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_WRITE);
+        } catch (DeadlockException de) {
+            System.err.println(de.getMessage());
+            try {
+                abort(id);
+            } catch (Exception e) {
+                System.err.println(e.getMessage());
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void Slock(int id, String name) {
+        try {
+            lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_READ);
+        } catch (DeadlockException de) {
+            System.err.println(de.getMessage());
+            try {
+                abort(id);
+            } catch (Exception e) {
+                System.err.println(e.getMessage());
+                e.printStackTrace();
+            }
+        }
+    }
 
     public ResourceManager(String p_name) {
         m_name = p_name;
@@ -23,6 +53,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
 
     // Reads a data item
     protected RMItem readData(int xid, String key) {
+        Slock(xid,key);
         // Item has been removed
         synchronized (latestOp) {
             if (latestOp.containsKey(xid) && latestOp.get(xid).containsKey(key) && latestOp.get(xid).get(key) == 'd') {
@@ -50,13 +81,14 @@ public class ResourceManager implements Server.Interface.IResourceManager {
     }
 
     // Writes a data item
-    protected void writeData(String key, RMItem value) {
+    protected void flushData(String key, RMItem value) {
         synchronized (m_data) {
             m_data.put(key, value);
         }
     }
 
     protected void writeTempData(int xid, String key, RMItem value) {
+        Xlock(xid,key);
         synchronized (writeSets) {
             if (!writeSets.containsKey(xid))
                 writeSets.put(xid, new HashMap<>());
@@ -71,13 +103,14 @@ public class ResourceManager implements Server.Interface.IResourceManager {
     }
 
     // Remove the item out of storage
-    protected void removeData(String key) {
+    protected void flushDataRemoval(String key) {
         synchronized (m_data) {
             m_data.remove(key);
         }
     }
 
     protected void removeTempData(int xid, String key) {
+        Xlock(xid,key);
         synchronized (writeSets) {
             if (writeSets.containsKey(xid)) {
                 HashMap<String, RMItem> writeSet = writeSets.get(xid);
@@ -389,13 +422,14 @@ public class ResourceManager implements Server.Interface.IResourceManager {
 
             for (HashMap.Entry<String, Character> entry : latestOp.get(transactionId).entrySet()) {
                 if (entry.getValue() == 'd')
-                    removeData(entry.getKey());
+                    flushDataRemoval(entry.getKey());
                 else {
                     synchronized (writeSets) {
-                        writeData(entry.getKey(), writeSets.get(transactionId).get(entry.getKey()));
+                        flushData(entry.getKey(), writeSets.get(transactionId).get(entry.getKey()));
                     }
                 }
             }
+            lockManager.UnlockAll(transactionId);
             writeSets.remove(transactionId);
             latestOp.remove(transactionId);
         }
@@ -410,6 +444,7 @@ public class ResourceManager implements Server.Interface.IResourceManager {
     public synchronized void abort(int transactionId) throws RemoteException,
             InvalidTransactionException {
         writeSets.remove(transactionId);
+        lockManager.UnlockAll(transactionId);
         latestOp.remove(transactionId);
     }
 

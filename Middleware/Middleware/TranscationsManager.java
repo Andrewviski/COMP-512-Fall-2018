@@ -7,16 +7,16 @@ import java.rmi.RemoteException;
 import java.util.*;
 
 public class TranscationsManager {
-    private int new_xid=0;
+    private int new_xid = 0;
     private final int TIME_TO_LIVE_MS = 100000;
     private RMIMiddleware ownerMiddleware;
-    private LockManager lockManager = new LockManager();
+
     private static HashSet<Integer> aliveCustomerIds = new HashSet<>();
     private HashSet<Integer> pendingXids = new HashSet<Integer>();
-    private HashMap<Integer,Boolean> updatesFlight = new HashMap<Integer, Boolean>();
-    private HashMap<Integer,Boolean> updatesCar = new HashMap<Integer, Boolean>();
-    private HashMap<Integer,Boolean> updatesRoom = new HashMap<Integer, Boolean>();
-    private HashMap<Integer,Timer> xidTimer = new HashMap<Integer,Timer>();
+    private HashSet<Integer> updatesFlight = new HashSet<Integer>();
+    private HashSet<Integer> updatesCar = new HashSet<Integer>();
+    private HashSet<Integer> updatesRoom = new HashSet<Integer>();
+    private HashMap<Integer, Timer> xidTimer = new HashMap<Integer, Timer>();
 
     TranscationsManager(RMIMiddleware ownerMiddleware) {
         this.ownerMiddleware = ownerMiddleware;
@@ -35,19 +35,19 @@ public class TranscationsManager {
         return ownerMiddleware.GetCarsManager();
     }
 
-    private void stopTimer(int xid){
+    private void stopTimer(int xid) {
         xidTimer.get(xid).cancel();
         xidTimer.remove(xid);
     }
 
     private void resetTimer(int xid) {
         stopTimer(xid);
-        xidTimer.put(xid,new Timer());
+        xidTimer.put(xid, new Timer());
         xidTimer.get(xid).schedule(
                 new TimerTask() {
                     @Override
                     public void run() {
-                        System.err.println("Transaction "+xid+" is aborted due to timeout");
+                        System.err.println("Transaction " + xid + " is aborted due to timeout");
                         try {
                             abort(xid);
                         } catch (Exception e) {
@@ -59,61 +59,43 @@ public class TranscationsManager {
         );
     }
 
-    private void Xlock(int id, String name) {
-        try {
-            lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_WRITE);
-        } catch (DeadlockException de) {
-            System.err.println(de.getMessage());
-            try {
-                abort(id);
-            } catch (Exception e) {
-                System.err.println(e.getMessage());
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private void Slock(int id, String name) {
-        try {
-            lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_READ);
-        } catch (DeadlockException de) {
-            System.err.println(de.getMessage());
-            try {
-                abort(id);
-            } catch (Exception e) {
-                System.err.println(e.getMessage());
-                e.printStackTrace();
-            }
-        }
-    }
-
-
     /// ================================= Interface impl ===============================================================
-
 
 
     public boolean addFlight(int id, int flightNum, int flightSeats, int flightPrice) throws RemoteException, InvalidTransactionException {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
-        Xlock(id, FlightsIndetifier(flightNum));
-        resetTimer(id);
-        return GetFlightsManager().addFlight(id, flightNum, flightSeats, flightPrice);
+
+        if (GetFlightsManager().addFlight(id, flightNum, flightSeats, flightPrice)) {
+            resetTimer(id);
+            updatesFlight.add(id);
+            return true;
+        }
+        return false;
     }
 
     public boolean addCars(int id, String location, int numCars, int price) throws RemoteException, InvalidTransactionException {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
-        Xlock(id, CarIndetifier(location));
-        resetTimer(id);
-        return GetCarsManager().addCars(id, location, numCars, price);
+
+        if (GetCarsManager().addCars(id, location, numCars, price)) {
+            resetTimer(id);
+            updatesCar.add(id);
+            return true;
+        }
+        return false;
     }
 
     public boolean addRooms(int id, String location, int numRooms, int price) throws RemoteException, InvalidTransactionException {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
-        Xlock(id, RoomIndetifier(location));
-        resetTimer(id);
-        return GetRoomsManager().addRooms(id, location, numRooms, price);
+
+        if(GetRoomsManager().addRooms(id, location, numRooms, price)){
+            resetTimer(id);
+            updatesRoom.add(id);
+            return true;
+        }
+        return false;
     }
 
     public int newCustomer(int id) throws RemoteException, InvalidTransactionException {
@@ -134,10 +116,13 @@ public class TranscationsManager {
     public boolean newCustomer(int id, int cid) throws RemoteException, InvalidTransactionException {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
-        Xlock(id, CustomerIndetifier(cid));
-        resetTimer(id);
+
         if (GetRoomsManager().newCustomer(id, cid) && GetCarsManager().newCustomer(id, cid) && GetFlightsManager().newCustomer(id, cid)) {
             aliveCustomerIds.add(cid);
+            resetTimer(id);
+            updatesFlight.add(id);
+            updatesCar.add(id);
+            updatesRoom.add(id);
             return true;
         }
         return false;
@@ -147,9 +132,12 @@ public class TranscationsManager {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
 
-        Xlock(id, FlightsIndetifier(flightNum));
-        resetTimer(id);
-        return GetFlightsManager().deleteFlight(id, flightNum);
+        if(GetFlightsManager().deleteFlight(id, flightNum)){
+            resetTimer(id);
+            updatesFlight.add(id);
+            return true;
+        }
+        return false;
     }
 
 
@@ -157,18 +145,25 @@ public class TranscationsManager {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
 
-        Xlock(id, CarIndetifier(location));
-        resetTimer(id);
-        return GetCarsManager().deleteCars(id, location);
+        if(GetCarsManager().deleteCars(id, location)){
+            resetTimer(id);
+            updatesCar.add(id);
+            return true;
+        }
+        return false;
     }
 
 
     public boolean deleteRooms(int id, String location) throws RemoteException, InvalidTransactionException {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
-        Xlock(id, RoomIndetifier(location));
-        resetTimer(id);
-        return GetRoomsManager().deleteRooms(id, location);
+
+        if(GetRoomsManager().deleteRooms(id, location)){
+            resetTimer(id);
+            updatesRoom.add(id);
+            return true;
+        }
+        return false;
     }
 
 
@@ -177,11 +172,15 @@ public class TranscationsManager {
             throw new InvalidTransactionException(id, "Invalid xid.");
         if (!aliveCustomerIds.contains(customerID))
             throw new RemoteException("Customer " + customerID + " does not exist.");
-        Xlock(id, CustomerIndetifier(customerID));
-        resetTimer(id);
+
         Boolean deleted = (GetRoomsManager().deleteCustomer(id, customerID) && GetCarsManager().deleteCustomer(id, customerID) && GetFlightsManager().deleteCustomer(id, customerID));
-        if (deleted)
+        if (deleted) {
             aliveCustomerIds.remove(customerID);
+            resetTimer(id);
+            updatesFlight.add(id);
+            updatesCar.add(id);
+            updatesRoom.add(id);
+        }
         return deleted;
     }
 
@@ -189,7 +188,6 @@ public class TranscationsManager {
     public int queryFlight(int id, int flightNumber) throws RemoteException, InvalidTransactionException {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
-        Slock(id, FlightsIndetifier(flightNumber));
         resetTimer(id);
         return GetFlightsManager().queryFlight(id, flightNumber);
     }
@@ -198,7 +196,6 @@ public class TranscationsManager {
     public int queryCars(int id, String location) throws RemoteException, InvalidTransactionException {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
-        Slock(id, CarIndetifier(location));
         resetTimer(id);
         return GetCarsManager().queryCars(id, location);
     }
@@ -207,7 +204,6 @@ public class TranscationsManager {
     public int queryRooms(int id, String location) throws RemoteException, InvalidTransactionException {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
-        Slock(id, RoomIndetifier(location));
         resetTimer(id);
         return GetRoomsManager().queryRooms(id, location);
     }
@@ -218,7 +214,6 @@ public class TranscationsManager {
             throw new InvalidTransactionException(id, "Querying with invalid xid.");
         if (!aliveCustomerIds.contains(customerID))
             throw new RemoteException("Customer " + customerID + " does not exist.");
-        Slock(id, CustomerIndetifier(customerID));
         resetTimer(id);
         return GetFlightsManager().queryCustomerInfo(id, customerID) + GetRoomsManager().queryCustomerInfo(id, customerID) + GetCarsManager().queryCustomerInfo(id, customerID);
     }
@@ -227,7 +222,6 @@ public class TranscationsManager {
     public int queryFlightPrice(int id, int flightNumber) throws RemoteException, InvalidTransactionException {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Querying with invalid xid.");
-        Slock(id, FlightsIndetifier(flightNumber));
         resetTimer(id);
         return GetFlightsManager().queryFlightPrice(id, flightNumber);
     }
@@ -236,7 +230,6 @@ public class TranscationsManager {
     public int queryCarsPrice(int id, String location) throws RemoteException, InvalidTransactionException {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Querying with invalid xid.");
-        Slock(id, CarIndetifier(location));
         resetTimer(id);
         return GetCarsManager().queryCarsPrice(id, location);
     }
@@ -245,7 +238,6 @@ public class TranscationsManager {
     public int queryRoomsPrice(int id, String location) throws RemoteException, InvalidTransactionException {
         if (!pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Querying with invalid xid.");
-        Slock(id, RoomIndetifier(location));
         resetTimer(id);
         return GetRoomsManager().queryRoomsPrice(id, location);
     }
@@ -256,10 +248,13 @@ public class TranscationsManager {
             throw new InvalidTransactionException(id, "Reserving with invalid xid.");
         if (!aliveCustomerIds.contains(customerID))
             throw new RemoteException("Customer " + customerID + " does not exist.");
-        Xlock(id, FlightsIndetifier(flightNumber));
-        Slock(id, CustomerIndetifier(customerID));
-        resetTimer(id);
-        return GetFlightsManager().reserveFlight(id, customerID, flightNumber);
+
+        if(GetFlightsManager().reserveFlight(id, customerID, flightNumber)){
+            resetTimer(id);
+            updatesFlight.add(id);
+            return true;
+        }
+        return false;
     }
 
 
@@ -268,10 +263,13 @@ public class TranscationsManager {
             throw new InvalidTransactionException(id, "Reserving with invalid xid");
         if (!aliveCustomerIds.contains(customerID))
             throw new RemoteException("Customer " + customerID + " does not exist.");
-        Xlock(id, CarIndetifier(location));
-        Slock(id, CustomerIndetifier(customerID));
-        resetTimer(id);
-        return GetCarsManager().reserveCar(id, customerID, location);
+
+        if(GetCarsManager().reserveCar(id, customerID, location)){
+            resetTimer(id);
+            updatesCar.add(id);
+            return true;
+        }
+        return false;
     }
 
 
@@ -280,10 +278,13 @@ public class TranscationsManager {
             throw new InvalidTransactionException(id, "Reserving with invalid xid");
         if (!aliveCustomerIds.contains(customerID))
             throw new RemoteException("Customer " + customerID + " does not exist.");
-        Xlock(id, RoomIndetifier(location));
-        Slock(id, CustomerIndetifier(customerID));
-        resetTimer(id);
-        return GetRoomsManager().reserveRoom(id, customerID, location);
+
+        if(GetRoomsManager().reserveRoom(id, customerID, location)){
+            resetTimer(id);
+            updatesRoom.add(id);
+            return true;
+        }
+        return false;
     }
 
 
@@ -294,12 +295,12 @@ public class TranscationsManager {
             throw new RemoteException("Customer " + customerID + " does not exist.");
 
 
-        if(car && GetCarsManager().queryCars(id,location)==0)
+        if (car && GetCarsManager().queryCars(id, location) == 0)
             return false;
-        if(room && GetRoomsManager().queryRooms(id,location)==0)
+        if (room && GetRoomsManager().queryRooms(id, location) == 0)
             return false;
 
-        for(String flightIdString:flightNumbers) {
+        for (String flightIdString : flightNumbers) {
             try {
                 int flightId = Integer.parseInt(flightIdString);
                 if (GetFlightsManager().queryFlight(id, flightId) == 0) {
@@ -311,21 +312,32 @@ public class TranscationsManager {
             }
         }
         Boolean passing = true;
-        if(car)
+        if (car)
             passing &= GetCarsManager().reserveCar(id, customerID, location);
 
-        if(room)
-            passing &=GetRoomsManager().reserveRoom(id, customerID, location);
+        if (room)
+            passing &= GetRoomsManager().reserveRoom(id, customerID, location);
 
-        for(String flightIdString:flightNumbers) {
+        for (String flightIdString : flightNumbers) {
             try {
                 int flightId = Integer.parseInt(flightIdString);
-                passing &= GetFlightsManager().reserveFlight(id,customerID,flightId);
+                passing &= GetFlightsManager().reserveFlight(id, customerID, flightId);
             } catch (NumberFormatException e) {
                 System.err.println("FlightId " + flightIdString + " is not a number!\n");
                 return false;
             }
         }
+
+        if(passing){
+            if(car)
+                updatesCar.add(id);
+            if(room)
+                updatesRoom.add(id);
+            if(flightNumbers.size()>0)
+                updatesFlight.add(id);
+            resetTimer(id);
+        }
+
         return passing;
     }
 
@@ -333,17 +345,14 @@ public class TranscationsManager {
         //final int xid = Integer.parseInt(String.valueOf(Calendar.getInstance().get(Calendar.MILLISECOND)) +
         //        String.valueOf(Math.round(Math.random() * 100 + 1)));
         pendingXids.add(new_xid);
-        updatesFlight.put(new_xid,false);
-        updatesCar.put(new_xid,false);
-        updatesRoom.put(new_xid,false);
 
         // Schedule a timer for the transaction.
-        xidTimer.put(new_xid,new Timer());
+        xidTimer.put(new_xid, new Timer());
         xidTimer.get(new_xid).schedule(
                 new TimerTask() {
                     @Override
                     public void run() {
-                        System.err.println("Transaction "+new_xid+" is aborted due to timeout");
+                        System.err.println("Transaction " + new_xid + " is aborted due to timeout");
                         try {
                             abort(new_xid);
                         } catch (Exception e) {
@@ -354,22 +363,30 @@ public class TranscationsManager {
                 TIME_TO_LIVE_MS
         );
         new_xid++;
-        return new_xid-1;
+        return new_xid - 1;
     }
 
     public boolean commit(int transactionId) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         if (!pendingXids.contains(transactionId)) {
             throw new InvalidTransactionException(transactionId, "Invalid commit xid.");
         }
-        Boolean status = false;
-        if (GetRoomsManager().readyToCommit() && GetCarsManager().readyToCommit() && GetFlightsManager().readyToCommit()) {
-            status = GetFlightsManager().commit(transactionId);
-            status &= GetRoomsManager().commit(transactionId);
-            status &= GetCarsManager().commit(transactionId);
-        }
+
+        List<IResourceManager> requiredServers = new ArrayList<>();
+
+        if (updatesFlight.contains(transactionId))
+            requiredServers.add(GetFlightsManager());
+
+        if (updatesRoom.contains(transactionId))
+            requiredServers.add(GetCarsManager());
+
+        if (updatesRoom.contains(transactionId))
+            requiredServers.add(GetRoomsManager());
+
+        Boolean status = true;
+        for (IResourceManager rm : requiredServers)
+            status &= rm.commit(transactionId);
 
         if (status) {
-            lockManager.UnlockAll(transactionId);
             pendingXids.remove(transactionId);
             stopTimer(transactionId);
         }
@@ -384,8 +401,15 @@ public class TranscationsManager {
         GetFlightsManager().abort(transactionId);
         GetRoomsManager().abort(transactionId);
         GetCarsManager().abort(transactionId);
-        lockManager.UnlockAll(transactionId);
         pendingXids.remove(transactionId);
+
+        if (updatesFlight.contains(transactionId))
+            updatesFlight.remove(transactionId);
+        if (updatesRoom.contains(transactionId))
+            updatesRoom.remove(transactionId);
+        if (updatesCar.contains(transactionId))
+            updatesCar.remove(transactionId);
+
         stopTimer(transactionId);
     }
 
