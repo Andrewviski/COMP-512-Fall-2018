@@ -7,14 +7,14 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
-public class PerformanceTester {
+public class PerformanceTesterbackup {
     private RMIClient client;
 
     public static void main(String[] args) {
-        PerformanceTester performanceTester = new PerformanceTester(args);
+        PerformanceTesterbackup performanceTester = new PerformanceTesterbackup(args);
     }
 
-    public PerformanceTester(String[] clientArgs) {
+    public PerformanceTesterbackup(String[] clientArgs) {
         this.client = new RMIClient();
         client.ParseMiddlewareServerConfig(clientArgs);
 
@@ -54,18 +54,6 @@ public class PerformanceTester {
             transactionTimes.add(array);
             System.out.println("Completed Transaction: " + i + ", of:" + loopCount);
 
-            try{
-                if(ms - time > 0){
-                    Thread.sleep(ms-time);
-                }
-                else
-                {
-                    System.out.println("Warning, cannot execute this many transactions per second");
-                }
-            }
-            catch(InterruptedException e) {
-                System.err.println(e.getMessage());
-            }
 
             for (int j = 0; j < transactionTimes.size(); j++) {
                 System.out.println(transactionTimes.get(j)[0] + "," + transactionTimes.get(j)[1] + "\n");
