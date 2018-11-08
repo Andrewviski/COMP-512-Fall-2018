@@ -154,36 +154,20 @@ public class RMIMiddleware implements IResourceManager {
     }
 
     public boolean addFlight(int id, int flightNum, int flightSeats, int flightPrice) throws RemoteException, InvalidTransactionException {
-        if (!txManager.addFlight(id, flightNum, flightSeats, flightPrice)) {
-            abort(id);
-            return false;
-        }
-        return true;
+        return txManager.addFlight(id, flightNum, flightSeats, flightPrice);
     }
 
     public boolean addCars(int id, String location, int numCars, int price) throws RemoteException, InvalidTransactionException {
-        if (txManager.addCars(id, location, numCars, price)) {
-            abort(id);
-            return false;
-        }
-        return true;
+        return txManager.addCars(id, location, numCars, price);
+
     }
 
     public boolean addRooms(int id, String location, int numRooms, int price) throws RemoteException, InvalidTransactionException {
-        if (txManager.addRooms(id, location, numRooms, price)) {
-            abort(id);
-            return false;
-        }
-        return true;
+        return txManager.addRooms(id, location, numRooms, price);
     }
 
     public int newCustomer(int id) throws RemoteException, InvalidTransactionException {
-        try{
-            txManager.newCustomer(id);
-        } catch (Exception e){
-            abort(id);
-            throw e;
-        }
+        return txManager.newCustomer(id);
     }
 
     public boolean newCustomer(int id, int cid) throws RemoteException, InvalidTransactionException {
@@ -271,11 +255,7 @@ public class RMIMiddleware implements IResourceManager {
 
     @Override
     public boolean commit(int transactionId) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        if(txManager.commit(transactionId)){
-            abort(transactionId);
-            return false;
-        }
-        return true;
+        return txManager.commit(transactionId);
     }
 
     @Override

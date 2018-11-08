@@ -453,7 +453,7 @@ public abstract class Client {
         } catch (InvalidTransactionException e) {
             System.out.println(e.getMessage());
             System.out.println("Please try with a different xid...");
-        }catch (TransactionAbortedException e) {
+        } catch (TransactionAbortedException e) {
             System.out.println(e.getMessage());
         } catch (RemoteException e) {
             System.out.println(e.getMessage());

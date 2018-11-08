@@ -39,6 +39,7 @@ public class TranscationsManager {
         xidTimer.get(xid).cancel();
         xidTimer.remove(xid);
     }
+
     private void resetTimer(int xid) {
         stopTimer(xid);
         xidTimer.put(xid,new Timer());
