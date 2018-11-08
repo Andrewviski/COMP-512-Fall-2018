@@ -11,7 +11,9 @@ public class PerformanceTester {
     private RMIClient client;
 
     public static void main(String[] args) {
+
         PerformanceTester performanceTester = new PerformanceTester(args);
+        performanceTester.launchTest(10,1);
     }
 
     public PerformanceTester(String[] clientArgs) {
@@ -29,6 +31,10 @@ public class PerformanceTester {
         int ms = 1000 / transactionPerSecond;
 
         ArrayList<int[]> transactionTimes = new ArrayList<int[]>();
+
+
+        int xid = generateTransactionId();
+
 
         List<String> args = new ArrayList<>();
 
@@ -103,7 +109,9 @@ public class PerformanceTester {
 
     }
 
-    private void launchDualResourceRequest() {
+    int generateTransactionId(
+    )
+    {
         List<String> args = new ArrayList<>();
 
         Integer xid = 0;
@@ -111,8 +119,14 @@ public class PerformanceTester {
             xid = (Integer) execute(Command.Start, args);
         } catch (ClassCastException e) {
             System.err.println("Did not receive a valid xid");
-            return;
+            return 0;
         }
+    }
+
+
+    private void launchDualResourceRequest(int xid) {
+        List<String> args = new ArrayList<>();
+
 
         int flightId1 = (int) (Math.random() * 100000);
         int flightId2 = (int) (Math.random() * 100000);
