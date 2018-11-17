@@ -1,5 +1,7 @@
 package Server.RMI;
 
+import LockManager.TransactionAbortedException;
+import Middleware.InvalidTransactionException;
 import Server.Interface.*;
 import Server.Common.*;
 
@@ -13,10 +15,10 @@ import java.rmi.server.UnicastRemoteObject;
 
 
 public class RMIResourceManager extends ResourceManager {
-
     private static String s_rmiPrefix = "group16_";
     private static String name = "Server";
     private static int port = 54000;
+    private HashMap<Integer,RMHashMap> editSet;
 
     private static void ReportServerError(String msg, Exception e) {
         System.err.println((char) 27 + "[31;1mServer exception: " + (char) 27 + "[0m" + msg + " ]");
@@ -70,7 +72,7 @@ public class RMIResourceManager extends ResourceManager {
                     ReportServerError("Unbounding failed", e);
                 }
             }));
-            System.out.println("'" + name + "' resource manager server ready and bound to '" + s_rmiPrefix + name + " at port "+ port +"'");
+            System.out.println("'" + name + "' resource manager server ready and bound to '" + s_rmiPrefix + name + " at port " + port + "'");
         } catch (Exception e) {
             ReportServerError("Uncaught exception", e);
         }
@@ -81,8 +83,8 @@ public class RMIResourceManager extends ResourceManager {
         }
     }
 
-
     public RMIResourceManager(String name) {
         super(name);
     }
+
 }
