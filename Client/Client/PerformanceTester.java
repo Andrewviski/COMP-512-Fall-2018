@@ -121,6 +121,7 @@ public class PerformanceTester {
             System.err.println("Did not receive a valid xid");
             return 0;
         }
+        return 0;
     }
 
 

@@ -1,6 +1,6 @@
-package Middleware;
+package Server.Interface;
 
-public class InvalidTransactionException extends Exception
+public class InvalidTransactionException extends RuntimeException
 {
     private int m_xid = 0;
 

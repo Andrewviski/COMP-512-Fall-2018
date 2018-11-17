@@ -3,7 +3,6 @@ package Middleware;
 import LockManager.DeadlockException;
 import LockManager.TransactionAbortedException;
 import Server.Interface.IResourceManager;
-import Server.RMI.RMIResourceManager;
 
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -11,7 +10,6 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.HashSet;
 import java.util.Vector;
 
@@ -154,98 +152,98 @@ public class RMIMiddleware implements IResourceManager {
         }
     }
 
-    public boolean addFlight(int id, int flightNum, int flightSeats, int flightPrice) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public boolean addFlight(int id, int flightNum, int flightSeats, int flightPrice) throws RemoteException {
         return txManager.addFlight(id, flightNum, flightSeats, flightPrice);
     }
 
-    public boolean addCars(int id, String location, int numCars, int price) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public boolean addCars(int id, String location, int numCars, int price) throws RemoteException {
         return txManager.addCars(id, location, numCars, price);
 
     }
 
-    public boolean addRooms(int id, String location, int numRooms, int price) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public boolean addRooms(int id, String location, int numRooms, int price) throws RemoteException {
         return txManager.addRooms(id, location, numRooms, price);
     }
 
-    public int newCustomer(int id) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public int newCustomer(int id) throws RemoteException {
         return txManager.newCustomer(id);
     }
 
-    public boolean newCustomer(int id, int cid) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public boolean newCustomer(int id, int cid) throws RemoteException {
         return txManager.newCustomer(id, cid);
     }
 
-    public boolean deleteFlight(int id, int flightNum) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public boolean deleteFlight(int id, int flightNum) throws RemoteException {
         return txManager.deleteFlight(id, flightNum);
     }
 
 
-    public boolean deleteCars(int id, String location) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public boolean deleteCars(int id, String location) throws RemoteException {
         return txManager.deleteCars(id, location);
     }
 
 
-    public boolean deleteRooms(int id, String location) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public boolean deleteRooms(int id, String location) throws RemoteException {
         return txManager.deleteRooms(id, location);
     }
 
 
-    public boolean deleteCustomer(int id, int customerID) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public boolean deleteCustomer(int id, int customerID) throws RemoteException {
         return txManager.deleteCustomer(id, customerID);
     }
 
 
-    public int queryFlight(int id, int flightNumber) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public int queryFlight(int id, int flightNumber) throws RemoteException {
         return txManager.queryFlight(id, flightNumber);
     }
 
 
-    public int queryCars(int id, String location) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public int queryCars(int id, String location) throws RemoteException {
         return txManager.queryCars(id, location);
     }
 
 
-    public int queryRooms(int id, String location) throws RemoteException, InvalidTransactionException, DeadlockException {
+    public int queryRooms(int id, String location) throws RemoteException {
         return txManager.queryRooms(id, location);
     }
 
 
-    public String queryCustomerInfo(int id, int customerID) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public String queryCustomerInfo(int id, int customerID) throws RemoteException {
         return txManager.queryCustomerInfo(id, customerID);
     }
 
 
-    public int queryFlightPrice(int id, int flightNumber) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public int queryFlightPrice(int id, int flightNumber) throws RemoteException {
         return txManager.queryFlightPrice(id, flightNumber);
     }
 
 
-    public int queryCarsPrice(int id, String location) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public int queryCarsPrice(int id, String location) throws RemoteException {
         return txManager.queryCarsPrice(id, location);
     }
 
 
-    public int queryRoomsPrice(int id, String location) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public int queryRoomsPrice(int id, String location) throws RemoteException {
         return txManager.queryRoomsPrice(id, location);
     }
 
 
-    public boolean reserveFlight(int id, int customerID, int flightNumber) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public boolean reserveFlight(int id, int customerID, int flightNumber) throws RemoteException {
         return txManager.reserveFlight(id, customerID, flightNumber);
     }
 
 
-    public boolean reserveCar(int id, int customerID, String location) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public boolean reserveCar(int id, int customerID, String location) throws RemoteException {
         return txManager.reserveCar(id, customerID, location);
     }
 
 
-    public boolean reserveRoom(int id, int customerID, String location) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public boolean reserveRoom(int id, int customerID, String location) throws RemoteException {
         return txManager.reserveRoom(id, customerID, location);
     }
 
 
-    public boolean bundle(int id, int customerID, Vector<String> flightNumbers, String location, boolean car, boolean room) throws RemoteException, InvalidTransactionException,DeadlockException {
+    public boolean bundle(int id, int customerID, Vector<String> flightNumbers, String location, boolean car, boolean room) throws RemoteException {
         return txManager.bundle(id, customerID, flightNumbers, location, car, room);
     }
 
@@ -255,12 +253,12 @@ public class RMIMiddleware implements IResourceManager {
     }
 
     @Override
-    public boolean commit(int transactionId) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+    public boolean commit(int transactionId) throws RemoteException, TransactionAbortedException {
         return txManager.commit(transactionId);
     }
 
     @Override
-    public void abort(int transactionId) throws RemoteException, InvalidTransactionException {
+    public void abort(int transactionId) throws RemoteException {
         txManager.abort(transactionId);
     }
 

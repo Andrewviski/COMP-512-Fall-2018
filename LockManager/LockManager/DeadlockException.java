@@ -1,7 +1,7 @@
 package LockManager;
 /* The transaction is deadlocked. Somebody should abort it. */
 
-public class DeadlockException extends Exception
+public class DeadlockException extends RuntimeException
 {
 	private int m_xid = 0;
 

@@ -1,6 +1,6 @@
 package LockManager;
 
-public class TransactionAbortedException extends Exception
+public class TransactionAbortedException extends RuntimeException
 {
     private int m_xid = 0;
 

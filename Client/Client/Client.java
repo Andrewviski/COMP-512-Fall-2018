@@ -2,7 +2,6 @@ package Client;
 
 import LockManager.DeadlockException;
 import LockManager.TransactionAbortedException;
-import Middleware.InvalidTransactionException;
 import Server.Interface.*;
 
 import java.util.*;
