@@ -41,4 +41,4 @@ tmux new-session \; \
 	select-pane -t 3 \; \
 	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[2]} \"cd ${SERVER_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; ./run_server.sh ${PORTS[2]} Cars\"" C-m \; \
 	select-pane -t 0 \; \
-	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[3]} \"cd ${MIDDLEWARE_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; sleep 1.5s; ./run_middleware.sh ${MACHINES[0]} ${MACHINES[1]} ${MACHINES[2]} ${PORTS[0]} ${PORTS[1]} ${PORTS[2]}}\"" C-m \;
+	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[3]} \"cd ${MIDDLEWARE_PATH} > /dev/null; make; echo -n 'Connected to '; hostname; sleep 1.5s; ./run_middleware.sh ${MACHINES[0]} ${MACHINES[1]} ${MACHINES[2]} ${PORTS[0]} ${PORTS[1]} ${PORTS[2]} \"" C-m \;
