@@ -4,4 +4,6 @@
 ./run_rmi.sh > /dev/null 2>&1
 kill -9  $(lsof -i:$1 -t) > /dev/null 2>&1
 sleep 0.2
-java -Djava.security.policy=java.policy -Djava.rmi.server.codebase=file:$(pwd) -cp ../target/classes/ Server.RMI.RMIResourceManager $1 $2
+java -Djava.security.policy=java.policy -cp ../target/512-project-1.0-SNAPSHOT.jar ca.mcgill.comp512.Server.RMI.RMIResourceManager $1 $2
+
+
