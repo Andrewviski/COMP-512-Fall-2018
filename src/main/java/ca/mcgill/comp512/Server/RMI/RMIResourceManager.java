@@ -4,11 +4,9 @@ import ca.mcgill.comp512.Server.Common.RMHashMap;
 import ca.mcgill.comp512.Server.Common.ResourceManager;
 import ca.mcgill.comp512.Server.Interface.IResourceManager;
 
-import java.io.*;
-import java.nio.file.Files;
-import java.rmi.registry.Registry;
-import java.rmi.registry.LocateRegistry;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.HashMap;
 
@@ -86,12 +84,12 @@ public class RMIResourceManager extends ResourceManager {
     }
 
     @Override
-	public String getName() throws RemoteException{
-		return name;
-	}
+    public String getName() throws RemoteException {
+        return name;
+    }
 
-	public String ToString() throws RemoteException{
-		return name+" Server @ "+port;
-	}
+    public String ToString() throws RemoteException {
+        return name + " Server @ " + port;
+    }
 
 }

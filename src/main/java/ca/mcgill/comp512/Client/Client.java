@@ -5,9 +5,13 @@ import ca.mcgill.comp512.LockManager.TransactionAbortedException;
 import ca.mcgill.comp512.Middleware.InvalidTransactionException;
 import ca.mcgill.comp512.Server.Interface.IResourceManager;
 
-import java.util.*;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.rmi.RemoteException;
+import java.util.List;
+import java.util.StringTokenizer;
+import java.util.Vector;
 
 
 public abstract class Client {
@@ -425,7 +429,7 @@ public abstract class Client {
                     return xid;
                 case Commit:
                     checkArgumentsCount(2, arguments.size());
-                    int commit_id=toInt(arguments.get(1));
+                    int commit_id = toInt(arguments.get(1));
                     if (resourceManager.commit(commit_id)) {
                         System.out.println("Transcation commited");
                         return true;
@@ -435,7 +439,7 @@ public abstract class Client {
                     }
                 case Abort:
                     checkArgumentsCount(2, arguments.size());
-                    int abort_id=toInt(arguments.get(1));
+                    int abort_id = toInt(arguments.get(1));
                     resourceManager.abort(abort_id);
                     System.out.println("Transcation aborted");
                     return true;
@@ -459,17 +463,17 @@ public abstract class Client {
             System.out.println(e.getMessage());
         } catch (RemoteException e) {
             System.out.println(e.getMessage());
-        } catch (DeadlockException dle){
-            System.out.println("The transaction "+dle.getXId()+" is deadlocked and aborted.");
+        } catch (DeadlockException dle) {
+            System.out.println("The transaction " + dle.getXId() + " is deadlocked and aborted.");
             try {
                 resourceManager.abort(dle.getXId());
-            }catch (Exception e){
-                System.out.println("Cannot abort deadlocked transaction "+ dle.getXId());
+            } catch (Exception e) {
+                System.out.println("Cannot abort deadlocked transaction " + dle.getXId());
             }
         }
         return null;
     }
-    
+
     public static Vector<String> parse(String command) {
         Vector<String> arguments = new Vector<String>();
         StringTokenizer tokenizer = new StringTokenizer(command, ",");

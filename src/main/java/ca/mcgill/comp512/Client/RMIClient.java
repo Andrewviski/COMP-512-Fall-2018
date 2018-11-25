@@ -2,10 +2,10 @@ package ca.mcgill.comp512.Client;
 
 import ca.mcgill.comp512.Server.Interface.IResourceManager;
 
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.rmi.RemoteException;
-import java.rmi.NotBoundException;
 
 public class RMIClient extends Client {
     private static String middlewareHostname = "localhost";
@@ -64,20 +64,18 @@ public class RMIClient extends Client {
             while (true) {
                 try {
                     Registry registry = LocateRegistry.getRegistry(middlewareHostname, middlewarePort);
-                    resourceManager = (IResourceManager)registry.lookup(s_rmiPrefix + middlewareName);
+                    resourceManager = (IResourceManager) registry.lookup(s_rmiPrefix + middlewareName);
                     System.out.println("Connected to middleware server [" + middlewareHostname + ":" + middlewarePort + "/" + s_rmiPrefix + middlewareName + "]");
                     break;
-                }
-                catch (NotBoundException|RemoteException e) {
+                } catch (NotBoundException | RemoteException e) {
                     if (firstAttempt) {
-                        ReportClientError("Waiting for middleware server [" + middlewareHostname + ":" + middlewarePort + "/" + s_rmiPrefix + middlewareName + "]",e);
+                        ReportClientError("Waiting for middleware server [" + middlewareHostname + ":" + middlewarePort + "/" + s_rmiPrefix + middlewareName + "]", e);
                         firstAttempt = false;
                     }
                 }
                 Thread.sleep(500);
             }
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             ReportClientError("Cannot connect to middlware at(" + middlewareHostname + ":" + middlewarePort + ")", e);
         }
     }
