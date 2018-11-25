@@ -1,6 +1,6 @@
 package ca.mcgill.comp512.Middleware;
 
-public class InvalidTransactionException extends Exception
+public class InvalidTransactionException extends RuntimeException
 {
     private int m_xid = 0;
 

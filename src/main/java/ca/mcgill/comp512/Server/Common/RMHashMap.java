@@ -5,10 +5,11 @@
 
 package ca.mcgill.comp512.Server.Common;
 
+import java.io.Serializable;
 import java.util.*;
 
 // A specialization of HashMap with some extra diagnostics
-public class RMHashMap extends HashMap<String, RMItem>
+public class RMHashMap extends HashMap<String, RMItem> implements Serializable
 {
 	public RMHashMap() {
 		super();

@@ -494,6 +494,6 @@ public abstract class Client {
 
     public static boolean toBoolean(String string)// throws Exception
     {
-        return (new Boolean(string)).booleanValue();
+        return string.equals("1") || string.equals("true");
     }
 }
