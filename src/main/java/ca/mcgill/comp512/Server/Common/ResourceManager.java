@@ -276,14 +276,15 @@ public class ResourceManager implements IResourceManager {
         }
     }
 
-    private void addPendingTransaction(int xid){
+    private void addPendingTransaction(int xid) {
         pendingXids.add(xid);
-        if(xidTimer.containsKey(xid)){
+        if (xidTimer.containsKey(xid)) {
             resetTimer(xid);
-        }else {
+        } else {
             xidTimer.put(xid, System.currentTimeMillis());
         }
     }
+
     // Deletes the encar item
     protected boolean deleteItem(int xid, String key) throws DeadlockException {
         Trace.info("RM::deleteItem(" + xid + ", " + key + ") called");
@@ -692,7 +693,10 @@ public class ResourceManager implements IResourceManager {
     public boolean prepare(int xid) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
         // Not sure what th point of this? :/
         crashIfModeIs(ResourceManagerCrashModes.AFTER_REC_VOTE_REQ);
-        boolean ans = true;
+        boolean vote = true;
+        if (!pendingXids.contains(xid)) {
+            vote = false;
+        }
         crashIfModeIs(ResourceManagerCrashModes.AFTER_SENDING_ANSWER);
 
         new Thread(() -> {
@@ -703,7 +707,9 @@ public class ResourceManager implements IResourceManager {
                 e.printStackTrace();
             }
         }).start();
-        return ans;
+        if(vote)
+            stopTimer(xid);
+        return vote;
     }
 
     @Override
