@@ -64,15 +64,21 @@ public class RMIMiddleware implements IResourceManager {
 
     // Resource managers accessors.
     public IResourceManager GetFlightsManager() {
-        return (dead[0]) ? null : resourceManagers[0];
+        if(dead[0])
+            throw new DeadResourceManagerException("Flights","");
+        return resourceManagers[0];
     }
 
     public IResourceManager GetRoomsManager() {
-        return (dead[1]) ? null : resourceManagers[1];
+        if(dead[1])
+            throw new DeadResourceManagerException("Rooms","");
+        return resourceManagers[1];
     }
 
     public IResourceManager GetCarsManager() {
-        return (dead[2]) ? null : resourceManagers[2];
+        if(dead[2])
+            throw new DeadResourceManagerException("Cars","");
+        return resourceManagers[2];
     }
 
     private static void ReportMiddleWareError(String msg, Exception e) {
@@ -310,17 +316,31 @@ public class RMIMiddleware implements IResourceManager {
 
     @Override
     public void resetCrashes() throws RemoteException {
-
+        this.txManager.SetCrashMode(TransactionManagerCrashModes.NONE);
     }
 
     @Override
     public void crashMiddleware(TransactionManagerCrashModes mode) throws RemoteException {
-
+        this.txManager.SetCrashMode(mode);
     }
 
     @Override
     public void crashResourceManager(String name, ResourceManagerCrashModes mode) throws RemoteException {
+        switch (name){
+            case "Flights":
+                GetFlightsManager().crashResourceManager("Flights",mode);
+                break;
+            case "Cars":
+                GetCarsManager().crashResourceManager("Cars",mode);
+                break;
+            case "Rooms":
+                GetRoomsManager().crashResourceManager("Rooms",mode);
+                break;
+                default:
+                    System.err.println("Trying to crash a non-existing resourceManager!");
+                    break;
 
+        }
     }
 
     public String getName() throws RemoteException {

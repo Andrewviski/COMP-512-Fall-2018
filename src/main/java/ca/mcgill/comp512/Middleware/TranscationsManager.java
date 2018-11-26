@@ -386,34 +386,11 @@ public class TranscationsManager {
         }
     }
 
-    private boolean TwoPC_Protocol(int transactionId) {
-        boolean success = true;
-
-        crashIfModeIs(IResourceManager.TransactionManagerCrashModes.BEFORE_SEND_VOTE_REQ);
-
-        List<IResourceManager> requiredServers = new ArrayList<>();
-        int invo_mask = involvementMask.get(transactionId);
-
-
-        if ((invo_mask & FLIGHTS_FLAG) != 0) {
-            requiredServers.add(GetFlightsManager());
-            System.out.println(transactionId + " need to be commited on flight server.");
-        }
-
-        if ((invo_mask & CARS_FLAG) != 0) {
-            requiredServers.add(GetCarsManager());
-            System.out.println(transactionId + " need to be commited on cars server.");
-        }
-
-        if ((invo_mask & ROOMS_FLAG) != 0) {
-            requiredServers.add(GetRoomsManager());
-
-        }
-
-
+    private ArrayList<Future<Boolean>> VotingPhase(int transactionId, List<IResourceManager> requiredServers) {
+        ArrayList<Future<Boolean>> votes = new ArrayList<>();
         if (requiredServers.size() > 0) {
-            final ArrayList<Callable<Boolean>> voteRequests = new ArrayList<>();
-            final ArrayList<Future<Boolean>> votes = new ArrayList<>();
+            ArrayList<Callable<Boolean>> voteRequests = new ArrayList<>();
+
 
             for (IResourceManager rm : requiredServers) {
                 voteRequests.add(() -> {
@@ -428,21 +405,23 @@ public class TranscationsManager {
             final ExecutorService service = Executors.newFixedThreadPool(voteRequests.size());
             for (Callable<Boolean> voteRequest : voteRequests)
                 votes.add(service.submit(voteRequest));
-
-            crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SEND_VOTE_REQ);
-
-            for (Future<Boolean> vote : votes) {
-                try {
-                    success &= vote.get();
-                    crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_REC_SOME_REPLIES);
-                } catch (Exception e) {
-                    System.err.println("Cannot get vote results from one of the servers");
-                    e.printStackTrace();
-                    service.shutdown();
-                    return false;
-                }
-            }
             service.shutdown();
+        }
+        crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SEND_VOTE_REQ);
+        return votes;
+    }
+
+    private boolean DecisionPhase(int transactionId, ArrayList<Future<Boolean>> votes, List<IResourceManager> requiredServers) {
+        boolean success = true;
+        for (Future<Boolean> vote : votes) {
+            try {
+                success &= vote.get();
+                crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_REC_SOME_REPLIES);
+            } catch (Exception e) {
+                System.err.println("Cannot get vote results from one of the servers");
+                e.printStackTrace();
+                return false;
+            }
         }
 
         // Not sure whats the difference? :/
@@ -456,9 +435,10 @@ public class TranscationsManager {
                     crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_SOME_DECISIONS);
                 } catch (Exception e) {
                     System.out.println("Failed to send a commit decision to " + rm.toString());
-                    e.printStackTrace();
+                    return false;
                 }
             }
+            return true;
         } else {
             for (IResourceManager rm : requiredServers) {
                 try {
@@ -466,11 +446,23 @@ public class TranscationsManager {
                     crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_SOME_DECISIONS);
                 } catch (Exception e) {
                     System.out.println("Failed to send an abort decision to " + rm.toString());
-                    e.printStackTrace();
+                    return false;
                 }
             }
         }
+        return true;
+    }
 
+    private boolean TwoPC_Protocol(int transactionId) {
+        List<IResourceManager> requiredServers = GetRequiredServers(transactionId);
+
+        boolean success=true;
+        crashIfModeIs(IResourceManager.TransactionManagerCrashModes.BEFORE_SEND_VOTE_REQ);
+        if (!DecisionPhase(transactionId, VotingPhase(transactionId, requiredServers), requiredServers)) {
+            crashIfModeIs(IResourceManager.TransactionManagerCrashModes.BEFORE_SEND_VOTE_REQ);
+            if(DecisionPhase(transactionId, VotingPhase(transactionId, requiredServers), requiredServers))
+                success=false;
+        }
 
         crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_ALL_DECISIONS);
         return success;
@@ -480,7 +472,6 @@ public class TranscationsManager {
         if (!pendingXids.contains(transactionId)) {
             throw new InvalidTransactionException(transactionId, "Invalid commit xid.");
         }
-        Log("START-2PC " + transactionId);
 
         boolean protocolSuccess = TwoPC_Protocol(transactionId);
 
@@ -524,20 +515,21 @@ public class TranscationsManager {
         }
     }
 
-    static private String FlightsIndetifier(int flightnum) {
-        return "flight-" + flightnum;
-    }
+    private List<IResourceManager> GetRequiredServers(int transactionId) {
+        List<IResourceManager> requiredServers = new ArrayList<>();
+        int invo_mask = involvementMask.get(transactionId);
+        if ((invo_mask & FLIGHTS_FLAG) != 0) {
+            requiredServers.add(GetFlightsManager());
+        }
 
-    static private String CustomerIndetifier(int cid) {
-        return "customer-" + cid;
-    }
+        if ((invo_mask & CARS_FLAG) != 0) {
+            requiredServers.add(GetCarsManager());
+        }
 
-    static private String CarIndetifier(String location) {
-        return "car-" + location;
-    }
-
-    static private String RoomIndetifier(String location) {
-        return "room-" + location;
+        if ((invo_mask & ROOMS_FLAG) != 0) {
+            requiredServers.add(GetRoomsManager());
+        }
+        return requiredServers;
     }
 
     public String getName() throws RemoteException {
@@ -548,6 +540,10 @@ public class TranscationsManager {
         if (this.mode == mode) {
             System.exit(1);
         }
+    }
+
+    public void SetCrashMode(IResourceManager.TransactionManagerCrashModes mode) {
+        this.mode = mode;
     }
 
     private void recover() {

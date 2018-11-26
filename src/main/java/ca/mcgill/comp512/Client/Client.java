@@ -2,6 +2,7 @@ package ca.mcgill.comp512.Client;
 
 import ca.mcgill.comp512.LockManager.DeadlockException;
 import ca.mcgill.comp512.LockManager.TransactionAbortedException;
+import ca.mcgill.comp512.Middleware.DeadResourceManagerException;
 import ca.mcgill.comp512.Middleware.InvalidTransactionException;
 import ca.mcgill.comp512.Server.Interface.IResourceManager;
 
@@ -456,12 +457,7 @@ public abstract class Client {
                         return false;
                     }
             }
-        } catch (InvalidTransactionException e) {
-            System.out.println(e.getMessage());
-            System.out.println("Please try with a different xid...");
-        } catch (TransactionAbortedException e) {
-            System.out.println(e.getMessage());
-        } catch (RemoteException e) {
+        } catch (RemoteException | TransactionAbortedException | InvalidTransactionException | DeadResourceManagerException e ) {
             System.out.println(e.getMessage());
         } catch (DeadlockException dle) {
             System.out.println("The transaction " + dle.getXId() + " is deadlocked and aborted.");

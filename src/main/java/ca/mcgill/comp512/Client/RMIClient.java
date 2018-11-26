@@ -8,16 +8,43 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 
 public class RMIClient extends Client {
+    private static int HEARTBEAT_FREQUENCY = 15000;
     private static String middlewareHostname = "localhost";
     private static int middlewarePort = 54006;
     private static String middlewareName = "Middleware";
-
     private static String s_rmiPrefix = "group16_";
+    private boolean middleware_dead = true;
 
     private static void ReportClientError(String msg, Exception e) {
         System.err.println((char) 27 + "[31;1mClient exception: " + (char) 27 + "[0m" + msg + "]");
         e.printStackTrace();
         System.exit(1);
+    }
+
+    public RMIClient() {
+        // Create a heartbeat thread
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(HEARTBEAT_FREQUENCY);
+                    if (!middleware_dead) {
+                        try {
+                            resourceManager.getName();
+                        } catch (Exception e) {
+                            connectServer();
+                            if (middleware_dead)
+                                System.out.println(middlewareName + " died, disconnecting!");
+                        }
+                    } else {
+                        connectServer();
+                        if (!middleware_dead)
+                            System.out.println(middlewareName + " is alive, reconnected!");
+                    }
+                } catch (Exception e) {
+
+                }
+            }
+        }).start();
     }
 
     public static void ParseMiddlewareServerConfig(String[] args) {
@@ -66,7 +93,7 @@ public class RMIClient extends Client {
                     Registry registry = LocateRegistry.getRegistry(middlewareHostname, middlewarePort);
                     resourceManager = (IResourceManager) registry.lookup(s_rmiPrefix + middlewareName);
                     System.out.println("Connected to middleware server [" + middlewareHostname + ":" + middlewarePort + "/" + s_rmiPrefix + middlewareName + "]");
-                    break;
+                    middleware_dead = false;
                 } catch (NotBoundException | RemoteException e) {
                     if (firstAttempt) {
                         ReportClientError("Waiting for middleware server [" + middlewareHostname + ":" + middlewarePort + "/" + s_rmiPrefix + middlewareName + "]", e);
@@ -78,5 +105,6 @@ public class RMIClient extends Client {
         } catch (Exception e) {
             ReportClientError("Cannot connect to middlware at(" + middlewareHostname + ":" + middlewarePort + ")", e);
         }
+        middleware_dead = true;
     }
 }
