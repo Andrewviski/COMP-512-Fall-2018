@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.rmi.RemoteException;
+import java.sql.SQLSyntaxErrorException;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -16,6 +17,7 @@ import java.util.concurrent.Future;
 
 public class TranscationsManager {
     private Integer idGen = 1;
+    private int TWOPHASECOMMIT_DELAY = 15000;
     public static final int FLIGHTS_FLAG = 1;  // 0001
     public static final int ROOMS_FLAG = 2;  // 0010
     public static final int CARS_FLAG = 4;  // 0100
@@ -386,11 +388,20 @@ public class TranscationsManager {
         }
     }
 
-    private ArrayList<Future<Boolean>> VotingPhase(int transactionId, List<IResourceManager> requiredServers) {
+    private ArrayList<Future<Boolean>> VotingPhase(int transactionId, List<IResourceManager> requiredServers)  {
+        System.out.println("2PC-"+transactionId+": asking for votes from:");
+        for(IResourceManager rm: requiredServers) {
+            try {
+                System.out.print(rm.getName() + " ");
+            } catch (Exception e) {
+                System.out.println("Couldn't access one of the required resource managers for " + transactionId);
+            }
+        }
+
+
         ArrayList<Future<Boolean>> votes = new ArrayList<>();
         if (requiredServers.size() > 0) {
             ArrayList<Callable<Boolean>> voteRequests = new ArrayList<>();
-
 
             for (IResourceManager rm : requiredServers) {
                 voteRequests.add(() -> {
@@ -456,12 +467,20 @@ public class TranscationsManager {
     private boolean TwoPC_Protocol(int transactionId) {
         List<IResourceManager> requiredServers = GetRequiredServers(transactionId);
 
-        boolean success=true;
+        boolean success = true;
         crashIfModeIs(IResourceManager.TransactionManagerCrashModes.BEFORE_SEND_VOTE_REQ);
         if (!DecisionPhase(transactionId, VotingPhase(transactionId, requiredServers), requiredServers)) {
+            System.out.println("2PC-"+transactionId+": failed, retrying in "+TWOPHASECOMMIT_DELAY/1000+" Seconds...");
+            // Sleep then retry again.
+            try {
+                Thread.sleep(TWOPHASECOMMIT_DELAY);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            }
+
             crashIfModeIs(IResourceManager.TransactionManagerCrashModes.BEFORE_SEND_VOTE_REQ);
-            if(DecisionPhase(transactionId, VotingPhase(transactionId, requiredServers), requiredServers))
-                success=false;
+            if (DecisionPhase(transactionId, VotingPhase(transactionId, requiredServers), requiredServers))
+                success = false;
         }
 
         crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_ALL_DECISIONS);
@@ -542,8 +561,9 @@ public class TranscationsManager {
         }
     }
 
-    public void SetCrashMode(IResourceManager.TransactionManagerCrashModes mode) {
+    public boolean SetCrashMode(IResourceManager.TransactionManagerCrashModes mode) {
         this.mode = mode;
+        return true;
     }
 
     private void recover() {

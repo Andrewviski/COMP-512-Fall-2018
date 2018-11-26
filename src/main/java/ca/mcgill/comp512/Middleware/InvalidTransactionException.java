@@ -8,7 +8,7 @@ public class InvalidTransactionException extends RuntimeException {
         m_xid = xid;
     }
 
-    int getXId() {
+    public int getXId() {
         return m_xid;
     }
 }

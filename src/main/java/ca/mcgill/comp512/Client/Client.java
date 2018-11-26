@@ -13,14 +13,44 @@ import java.rmi.RemoteException;
 import java.util.List;
 import java.util.StringTokenizer;
 import java.util.Vector;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
 public abstract class Client {
+    private static int HEARTBEAT_FREQUENCY = 1000;
     IResourceManager resourceManager = null;
-
+    protected AtomicBoolean middleware_dead = new AtomicBoolean(true);
+    protected static String middlewareName = "Middleware";
+    protected static String middlewareHostname = "localhost";
+    protected static int middlewarePort = 54006;
     public abstract void connectServer();
 
     public void start() {
+
+        // Create a heartbeat thread
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(HEARTBEAT_FREQUENCY);
+                    if (!middleware_dead.get()) {
+                        try {
+                            resourceManager.getName();
+                        } catch (Exception e) {
+                            connectServer();
+                            if (middleware_dead.get())
+                                System.out.println(middlewareName + " died, disconnecting!");
+                        }
+                    } else {
+                        connectServer();
+                        if (!middleware_dead.get())
+                            System.out.println(middlewareName + " is alive, reconnected!");
+                    }
+                } catch (Exception e) {
+                    System.out.println("Heartbreat exception at client");
+                }
+            }
+        }).start();
+
         // Prepare for reading commands
         System.out.println();
         System.out.println("Location \"help\" for list of supported commands");
@@ -446,6 +476,38 @@ public abstract class Client {
                     return true;
 
                 case Shutdown:
+                    checkArgumentsCount(1, arguments.size());
+
+                    if (resourceManager.shutdown()) {
+                        System.out.println("System has shutdown");
+                        System.exit(0);
+                        return true;
+                    } else {
+                        System.out.println("System could not shutdown");
+                        return false;
+                    }
+                case ResetCrashes:
+                    checkArgumentsCount(1, arguments.size());
+
+                    if (resourceManager.resetCrashes()) {
+                        System.out.println("All crash modes have been");
+                        return true;
+                    } else {
+                        System.out.println("Reset Crashes failed");
+                        return false;
+                    }
+                case CrashMiddleware:
+                    checkArgumentsCount(1, arguments.size());
+
+                    if (resourceManager.shutdown()) {
+                        System.out.println("System has shutdown");
+                        System.exit(0);
+                        return true;
+                    } else {
+                        System.out.println("System could not shutdown");
+                        return false;
+                    }
+                case CrashReourceManager:
                     checkArgumentsCount(1, arguments.size());
 
                     if (resourceManager.shutdown()) {

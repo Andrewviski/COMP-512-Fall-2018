@@ -14,17 +14,17 @@ import ca.mcgill.comp512.Server.Interface.IResourceManager;
 
 import java.io.*;
 import java.rmi.RemoteException;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.Scanner;
-import java.util.Vector;
+import java.util.*;
 
 public class ResourceManager implements IResourceManager {
+    private final int TIME_TO_LIVE_MS = 15000;
     protected static String name = "Server";
     protected RMHashMap m_data = new RMHashMap();
     protected HashMap<Integer, HashMap<String, RMItem>> writeSets = new HashMap<>();
     protected HashMap<Integer, HashMap<String, Character>> latestOp = new HashMap<>();
+    private HashMap<Integer, Long> xidTimer = new HashMap<>();
     private LockManager lockManager;
+    private HashSet<Integer> pendingXids = new HashSet<>();
     private ResourceManagerCrashModes mode = ResourceManagerCrashModes.NONE;
     private String storageKey = "StorageKey";
 
@@ -35,6 +35,15 @@ public class ResourceManager implements IResourceManager {
     private String[] filenames = {"", "", "", ""};
     private Boolean logAccess = true;
 
+    private void stopTimer(int xid) {
+        System.out.println("Stopping the timer for " + xid);
+        xidTimer.remove(xid);
+    }
+
+    private void resetTimer(int xid) {
+        System.out.println("Reseting the timer for " + xid);
+        xidTimer.put(xid, System.currentTimeMillis());
+    }
 
     private String masterRecordFilename() {
         return filenames[0];
@@ -167,6 +176,27 @@ public class ResourceManager implements IResourceManager {
             }
 
         }
+
+        // Create a tx timeout thread
+        new Thread(() -> {
+            while (true) {
+                try {
+                    for (Integer xid : pendingXids) {
+                        if (System.currentTimeMillis() - xidTimer.get(xid) > TIME_TO_LIVE_MS) {
+                            abort(xid);
+                        }
+                    }
+                    Thread.sleep(1000);
+                } catch (InvalidTransactionException e) {
+                    System.err.println("Failed to abort transaction-" + e.getXId() + " in the timeout thread");
+                    e.printStackTrace();
+
+                } catch (Exception e) {
+                    System.err.println("Failed to abort a transaction in the timeout thread");
+                    e.printStackTrace();
+                }
+            }
+        }).start();
     }
 
     // Reads a data item
@@ -246,6 +276,14 @@ public class ResourceManager implements IResourceManager {
         }
     }
 
+    private void addPendingTransaction(int xid){
+        pendingXids.add(xid);
+        if(xidTimer.containsKey(xid)){
+            resetTimer(xid);
+        }else {
+            xidTimer.put(xid, System.currentTimeMillis());
+        }
+    }
     // Deletes the encar item
     protected boolean deleteItem(int xid, String key) throws DeadlockException {
         Trace.info("RM::deleteItem(" + xid + ", " + key + ") called");
@@ -325,6 +363,7 @@ public class ResourceManager implements IResourceManager {
     // Create a new flight, or add seats to existing flight
     // NOTE: if flightPrice <= 0 and the flight already exists, it maintains its current price
     public boolean addFlight(int xid, int flightNum, int flightSeats, int flightPrice) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         Trace.info("RM::addFlight(" + xid + ", " + flightNum + ", " + flightSeats + ", $" + flightPrice + ") called");
         Flight curObj = (Flight) readData(xid, Flight.getKey(flightNum));
         if (curObj == null) {
@@ -347,6 +386,7 @@ public class ResourceManager implements IResourceManager {
     // Create a new car location or add cars to an existing location
     // NOTE: if price <= 0 and the location already exists, it maintains its current price
     public boolean addCars(int xid, String location, int count, int price) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         Trace.info("RM::addCars(" + xid + ", " + location + ", " + count + ", $" + price + ") called");
         Car curObj = (Car) readData(xid, Car.getKey(location));
         if (curObj == null) {
@@ -369,6 +409,7 @@ public class ResourceManager implements IResourceManager {
     // Create a new room location or add rooms to an existing location
     // NOTE: if price <= 0 and the room location already exists, it maintains its current price
     public boolean addRooms(int xid, String location, int count, int price) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         Trace.info("RM::addRooms(" + xid + ", " + location + ", " + count + ", $" + price + ") called");
         Room curObj = (Room) readData(xid, Room.getKey(location));
         if (curObj == null) {
@@ -390,50 +431,60 @@ public class ResourceManager implements IResourceManager {
 
     // Deletes flight
     public boolean deleteFlight(int xid, int flightNum) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         return deleteItem(xid, Flight.getKey(flightNum));
     }
 
     // Delete cars at a location
     public boolean deleteCars(int xid, String location) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         return deleteItem(xid, Car.getKey(location));
     }
 
     // Delete rooms at a location
     public boolean deleteRooms(int xid, String location) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         return deleteItem(xid, Room.getKey(location));
     }
 
     // Returns the number of empty seats in this flight
     public int queryFlight(int xid, int flightNum) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         return queryNum(xid, Flight.getKey(flightNum));
     }
 
     // Returns the number of cars available at a location
     public int queryCars(int xid, String location) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         return queryNum(xid, Car.getKey(location));
     }
 
     // Returns the amount of rooms available at a location
     public int queryRooms(int xid, String location) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         return queryNum(xid, Room.getKey(location));
     }
 
     // Returns price of a seat in this flight
     public int queryFlightPrice(int xid, int flightNum) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         return queryPrice(xid, Flight.getKey(flightNum));
     }
 
     // Returns price of cars at this location
     public int queryCarsPrice(int xid, String location) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         return queryPrice(xid, Car.getKey(location));
     }
 
     // Returns room price at this location
     public int queryRoomsPrice(int xid, String location) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         return queryPrice(xid, Room.getKey(location));
     }
 
     public String queryCustomerInfo(int xid, int customerID) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         Trace.info("RM::queryCustomerInfo(" + xid + ", " + customerID + ") called");
         Customer customer = (Customer) readData(xid, Customer.getKey(customerID));
         if (customer == null) {
@@ -448,6 +499,7 @@ public class ResourceManager implements IResourceManager {
     }
 
     public int newCustomer(int xid) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         Trace.info("RM::newCustomer(" + xid + ") called");
         // Generate a globally unique ID for the new customer
         int cid = Integer.parseInt(String.valueOf(xid) +
@@ -460,6 +512,7 @@ public class ResourceManager implements IResourceManager {
     }
 
     public boolean newCustomer(int xid, int customerID) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         Trace.info("RM::newCustomer(" + xid + ", " + customerID + ") called");
         Customer customer = (Customer) readData(xid, Customer.getKey(customerID));
         if (customer == null) {
@@ -474,6 +527,7 @@ public class ResourceManager implements IResourceManager {
     }
 
     public boolean deleteCustomer(int xid, int customerID) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         Trace.info("RM::deleteCustomer(" + xid + ", " + customerID + ") called");
         Customer customer = (Customer) readData(xid, Customer.getKey(customerID));
         if (customer == null) {
@@ -501,16 +555,19 @@ public class ResourceManager implements IResourceManager {
 
     // Adds flight reservation to this customer
     public boolean reserveFlight(int xid, int customerID, int flightNum) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         return reserveItem(xid, customerID, Flight.getKey(flightNum), String.valueOf(flightNum));
     }
 
     // Adds car reservation to this customer
     public boolean reserveCar(int xid, int customerID, String location) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         return reserveItem(xid, customerID, Car.getKey(location), location);
     }
 
     // Adds room reservation to this customer
     public boolean reserveRoom(int xid, int customerID, String location) throws RemoteException, DeadlockException {
+        addPendingTransaction(xid);
         return reserveItem(xid, customerID, Room.getKey(location), location);
     }
 
@@ -555,12 +612,12 @@ public class ResourceManager implements IResourceManager {
             System.out.println("Writing " + transactionId + " to disk");
             WriteToDisk(transactionId);
 
+            pendingXids.remove(transactionId);
+            stopTimer(transactionId);
             lockManager.UnlockAll(transactionId);
             writeSets.remove(transactionId);
             latestOp.remove(transactionId);
         }
-
-
         return true;
 
     }
@@ -572,8 +629,11 @@ public class ResourceManager implements IResourceManager {
      */
     public synchronized void abort(int transactionId) throws RemoteException,
             InvalidTransactionException {
+        // TODO: akaba, this will create a bug where a non 2PC thing is going to call abort.
         crashIfModeIs(ResourceManagerCrashModes.AFTER_REC_DECISION);
         System.out.println("Aborting " + transactionId);
+        pendingXids.remove(transactionId);
+        stopTimer(transactionId);
         writeSets.remove(transactionId);
         lockManager.UnlockAll(transactionId);
         latestOp.remove(transactionId);
@@ -647,19 +707,21 @@ public class ResourceManager implements IResourceManager {
     }
 
     @Override
-    public void resetCrashes() throws RemoteException {
+    public boolean resetCrashes() throws RemoteException {
         mode = ResourceManagerCrashModes.NONE;
+        return true;
     }
 
     @Override
-    public void crashMiddleware(TransactionManagerCrashModes mode) throws RemoteException {
+    public boolean crashMiddleware(TransactionManagerCrashModes mode) throws RemoteException {
         //I'm not a middlware fuck off
         throw new RuntimeException("crashMiddleware called on resourceManager");
     }
 
     @Override
-    public void crashResourceManager(String name, ResourceManagerCrashModes mode) throws RemoteException {
+    public boolean crashResourceManager(String name, ResourceManagerCrashModes mode) throws RemoteException {
         this.mode = mode;
+        return true;
     }
 
     public String getName() throws RemoteException {

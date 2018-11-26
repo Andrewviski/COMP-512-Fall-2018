@@ -64,20 +64,20 @@ public class RMIMiddleware implements IResourceManager {
 
     // Resource managers accessors.
     public IResourceManager GetFlightsManager() {
-        if(dead[0])
-            throw new DeadResourceManagerException("Flights","");
+        if (dead[0])
+            throw new DeadResourceManagerException("Flights", "");
         return resourceManagers[0];
     }
 
     public IResourceManager GetRoomsManager() {
-        if(dead[1])
-            throw new DeadResourceManagerException("Rooms","");
+        if (dead[1])
+            throw new DeadResourceManagerException("Rooms", "");
         return resourceManagers[1];
     }
 
     public IResourceManager GetCarsManager() {
-        if(dead[2])
-            throw new DeadResourceManagerException("Cars","");
+        if (dead[2])
+            throw new DeadResourceManagerException("Cars", "");
         return resourceManagers[2];
     }
 
@@ -315,32 +315,30 @@ public class RMIMiddleware implements IResourceManager {
     }
 
     @Override
-    public void resetCrashes() throws RemoteException {
-        this.txManager.SetCrashMode(TransactionManagerCrashModes.NONE);
+    public boolean resetCrashes() throws RemoteException {
+        return this.txManager.SetCrashMode(TransactionManagerCrashModes.NONE);
     }
 
     @Override
-    public void crashMiddleware(TransactionManagerCrashModes mode) throws RemoteException {
-        this.txManager.SetCrashMode(mode);
+    public boolean crashMiddleware(TransactionManagerCrashModes mode) throws RemoteException {
+        return this.txManager.SetCrashMode(mode);
     }
 
     @Override
-    public void crashResourceManager(String name, ResourceManagerCrashModes mode) throws RemoteException {
-        switch (name){
+    public boolean crashResourceManager(String name, ResourceManagerCrashModes mode) throws RemoteException {
+        switch (name) {
             case "Flights":
-                GetFlightsManager().crashResourceManager("Flights",mode);
-                break;
+                return GetFlightsManager().crashResourceManager("Flights", mode);
             case "Cars":
-                GetCarsManager().crashResourceManager("Cars",mode);
-                break;
+                return GetCarsManager().crashResourceManager("Cars", mode);
             case "Rooms":
-                GetRoomsManager().crashResourceManager("Rooms",mode);
+                return GetRoomsManager().crashResourceManager("Rooms", mode);
+            default:
+                System.err.println("Trying to crash a non-existing resourceManager!");
                 break;
-                default:
-                    System.err.println("Trying to crash a non-existing resourceManager!");
-                    break;
 
         }
+        return false;
     }
 
     public String getName() throws RemoteException {

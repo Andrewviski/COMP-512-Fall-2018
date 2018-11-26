@@ -255,7 +255,7 @@ public interface IResourceManager extends Remote {
      *
      * @return
      */
-    public void resetCrashes() throws RemoteException;
+    public boolean resetCrashes() throws RemoteException;
 
     /**
      * Enable a crash mode at the middleware
@@ -264,7 +264,7 @@ public interface IResourceManager extends Remote {
      * @return
      * @throws RemoteException
      */
-    public void crashMiddleware(TransactionManagerCrashModes mode) throws RemoteException;
+    public boolean crashMiddleware(TransactionManagerCrashModes mode) throws RemoteException;
 
     /**
      * Enable a crash mode at a resource manager
@@ -274,7 +274,7 @@ public interface IResourceManager extends Remote {
      * @return
      * @throws RemoteException
      */
-    public void crashResourceManager(String name, ResourceManagerCrashModes mode) throws RemoteException;
+    public boolean crashResourceManager(String name, ResourceManagerCrashModes mode) throws RemoteException;
 
     /**
      * Convenience for probing the resource manager.
