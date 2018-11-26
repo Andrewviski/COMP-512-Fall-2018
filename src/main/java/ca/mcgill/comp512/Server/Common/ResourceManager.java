@@ -17,16 +17,25 @@ import java.rmi.RemoteException;
 import java.util.*;
 
 public class ResourceManager implements IResourceManager {
-    private final int TIME_TO_LIVE_MS = 15000;
-    protected static String name = "Server";
+
+    // Reloaded from disk upon start
     protected RMHashMap m_data = new RMHashMap();
+
+    // Do these need to be restored upon recovery?
     protected HashMap<Integer, HashMap<String, RMItem>> writeSets = new HashMap<>();
     protected HashMap<Integer, HashMap<String, Character>> latestOp = new HashMap<>();
     private HashMap<Integer, Long> xidTimer = new HashMap<>();
     private LockManager lockManager;
     private HashSet<Integer> pendingXids = new HashSet<>();
+
     private ResourceManagerCrashModes mode = ResourceManagerCrashModes.NONE;
-    private String storageKey = "StorageKey";
+
+    private static final String storageKey = "StorageKey";
+    private static final String trxStateLogFilename = "trxState.log";
+    private static final int TIME_TO_LIVE_MS = 15000;
+    protected static String name = "Server";
+
+
     private Map<Integer, String> transactionStates = new HashMap<>();
 
     // 0: masterRecordFilename
@@ -80,17 +89,7 @@ public class ResourceManager implements IResourceManager {
 
     private void WriteToDisk(int transactionId) {
         Xlock(transactionId, storageKey);
-        String latest = "";
-        try {
-            Scanner sc = new Scanner(new File(masterRecordFilename()));
-            if (!sc.hasNext())
-                throw new Exception();
-            latest = sc.nextLine();
-            sc.close();
-        } catch (Exception e) {
-            System.err.println("Cannot access data on masterRecord");
-            e.printStackTrace();
-        }
+        String latest = readMasterRecordFile();
 
         // Write the object
         try {
@@ -113,6 +112,21 @@ public class ResourceManager implements IResourceManager {
             System.err.println("Failed to write to MasterRecord");
             e.printStackTrace();
         }
+    }
+
+    private String readMasterRecordFile() {
+        String latest = "";
+        try {
+            Scanner sc = new Scanner(new File(masterRecordFilename()));
+            if (!sc.hasNext())
+                throw new Exception();
+            latest = sc.nextLine();
+            sc.close();
+        } catch (Exception e) {
+            System.err.println("Cannot access data on masterRecord");
+            e.printStackTrace();
+        }
+        return latest;
     }
 
 
@@ -185,7 +199,7 @@ public class ResourceManager implements IResourceManager {
                     for (Integer xid : pendingXids) {
                         if (System.currentTimeMillis() - xidTimer.get(xid) > TIME_TO_LIVE_MS) {
                             abort(xid);
-                            transactionStates.put(xid, "Abort")
+                            transactionStates.put(xid, "Abort");
                         }
                     }
                     Thread.sleep(1000);
@@ -621,6 +635,7 @@ public class ResourceManager implements IResourceManager {
             writeSets.remove(transactionId);
             latestOp.remove(transactionId);
         }
+        transactionStates.put(transactionId, "Commit");
         return true;
 
     }
@@ -640,6 +655,7 @@ public class ResourceManager implements IResourceManager {
         writeSets.remove(transactionId);
         lockManager.UnlockAll(transactionId);
         latestOp.remove(transactionId);
+        transactionStates.put(transactionId, "Abort");
     }
 
     /**
@@ -697,6 +713,8 @@ public class ResourceManager implements IResourceManager {
         crashIfModeIs(ResourceManagerCrashModes.AFTER_REC_VOTE_REQ);
         boolean vote = true;
         if (!pendingXids.contains(xid)) {
+            abort(xid);
+            transactionStates.put(xid, "Abort");
             vote = false;
         }
         crashIfModeIs(ResourceManagerCrashModes.AFTER_SENDING_ANSWER);
@@ -709,8 +727,11 @@ public class ResourceManager implements IResourceManager {
                 e.printStackTrace();
             }
         }).start();
-        if(vote)
+        if (vote) {
+
+            transactionStates.put(xid, "Yes");
             stopTimer(xid);
+        }
         return vote;
     }
 
@@ -737,7 +758,52 @@ public class ResourceManager implements IResourceManager {
     }
 
     private void recover() {
-        // TODO(abudan): Implement this
+        try (ObjectInputStream transactionStatesFile =
+                     new ObjectInputStream(new FileInputStream(trxStateLogFilename));
+             ObjectInputStream dataStore =
+                     new ObjectInputStream(new FileInputStream(readMasterRecordFile()));
+        ) {
+
+            transactionStates = (Map<Integer, String>) transactionStatesFile.readObject();
+            m_data = (RMHashMap) dataStore.readObject();
+
+            for (int xid : pendingXids) {
+                if (transactionStates.containsKey(xid)) {
+                    // Do nothing if you find a commit/abort record
+                    if (transactionStates.get(xid).equals("Commit") || transactionStates.get(xid).equals("Abort")) {
+                        continue;
+                    }
+                    // Waits indefinitely ¯\_(ツ)_/¯ according to Alex
+                    else if (transactionStates.get(xid).equals("Yes")) {
+                        continue;
+                    } else {
+                        // Technically in 2PC we need to send an abort vote to the coordinator, but ok because it will timeout and abort, right?
+                        abort(xid);
+                    }
+                }
+            }
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    private void saveLog() {
+        try (ObjectOutputStream oos =
+                     new ObjectOutputStream(new FileOutputStream(trxStateLogFilename))) {
+
+            oos.writeObject(transactionStates);
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private void crashIfModeIs(ResourceManagerCrashModes mode) {
