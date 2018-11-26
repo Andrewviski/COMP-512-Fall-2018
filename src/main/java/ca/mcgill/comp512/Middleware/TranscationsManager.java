@@ -4,9 +4,7 @@ import ca.mcgill.comp512.LockManager.DeadlockException;
 import ca.mcgill.comp512.LockManager.TransactionAbortedException;
 import ca.mcgill.comp512.Server.Interface.IResourceManager;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.PrintWriter;
+import java.io.*;
 import java.rmi.RemoteException;
 import java.sql.SQLSyntaxErrorException;
 import java.util.*;
@@ -16,6 +14,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 public class TranscationsManager {
+    private static class TranscationsManagerState implements Serializable {
+        HashSet<Integer> aliveCustomerIds = new HashSet<>();
+        HashSet<Integer> pendingXids = new HashSet<>();
+        HashMap<Integer, Integer> involvementMask = new HashMap<>();
+        HashMap<Integer, Long> xidTimer = new HashMap<>();
+        HashMap<Integer, String> transactionStates = new HashMap<>();
+    }
+
     private Integer idGen = 1;
     private int TWOPHASECOMMIT_DELAY = 15000;
     public static final int FLIGHTS_FLAG = 1;  // 0001
@@ -24,13 +30,11 @@ public class TranscationsManager {
 
     private final int TIME_TO_LIVE_MS = 15000;
     private RMIMiddleware ownerMiddleware;
-
-    private static HashSet<Integer> aliveCustomerIds = new HashSet<>();
-    private HashSet<Integer> pendingXids = new HashSet<>();
-    private HashMap<Integer, Integer> involvementMask = new HashMap<>();
-    private HashMap<Integer, Long> xidTimer = new HashMap<>();
+    private TranscationsManagerState state;
     private IResourceManager.TransactionManagerCrashModes mode = IResourceManager.TransactionManagerCrashModes.NONE;
-    private String logFilename = "transactionManager.log";
+    private final String stateFilename = "transactionManagerState.bin";
+    private final String logFilename = "transactionManager.log";
+
     private Boolean logAccess = true;
 
     private void Log(String logMessage) {
@@ -52,18 +56,19 @@ public class TranscationsManager {
 
     TranscationsManager(RMIMiddleware ownerMiddleware) {
         this.ownerMiddleware = ownerMiddleware;
+        this.state = new TranscationsManagerState();
         // If a log exist then we are recovering, otherwise it's a fresh bootup.
-        File log = new File(logFilename);
+        File log = new File(stateFilename);
         if (log.exists()) {
-            System.err.println("Recovering from " + logFilename);
-            recover();
+            System.err.println("Recovering from " + stateFilename);
+            recoverState();
         } else {
             try {
-                System.err.println("Creating " + logFilename);
+                System.err.println("Creating " + stateFilename);
                 log.createNewFile();
                 log.deleteOnExit();
             } catch (Exception e) {
-                System.err.println("Failed to create " + logFilename + " terminating...");
+                System.err.println("Failed to create " + stateFilename + " terminating...");
                 e.printStackTrace();
                 System.exit(-1);
             }
@@ -73,9 +78,10 @@ public class TranscationsManager {
         new Thread(() -> {
             while (true) {
                 try {
-                    for (Integer xid : pendingXids) {
-                        if (System.currentTimeMillis() - xidTimer.get(xid) > TIME_TO_LIVE_MS) {
+                    for (Integer xid : state.pendingXids) {
+                        if (System.currentTimeMillis() - state.xidTimer.get(xid) > TIME_TO_LIVE_MS) {
                             abort(xid);
+
                         }
                     }
                     Thread.sleep(1000);
@@ -106,17 +112,20 @@ public class TranscationsManager {
 
     private void stopTimer(int xid) {
         System.out.println("Stopping the timer for " + xid);
-        xidTimer.remove(xid);
+        state.xidTimer.remove(xid);
+        saveState();
     }
 
     private void resetTimer(int xid) {
         System.out.println("Reseting the timer for " + xid);
-        xidTimer.put(xid, System.currentTimeMillis());
+        state.xidTimer.put(xid, System.currentTimeMillis());
+        saveState();
     }
 
     private void UpdateMask(int transactionId, int flag) {
-        int newMask = (involvementMask.get(transactionId) | flag);
-        involvementMask.put(transactionId, newMask);
+        int newMask = (state.involvementMask.get(transactionId) | flag);
+        state.involvementMask.put(transactionId, newMask);
+        saveState();
         Log(transactionId + " involvementMask " + newMask);
     }
 
@@ -125,7 +134,7 @@ public class TranscationsManager {
 
     public boolean addFlight(int id, int flightNum, int flightSeats, int flightPrice) throws RemoteException, InvalidTransactionException, DeadlockException {
 
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
         resetTimer(id);
         UpdateMask(id, FLIGHTS_FLAG);
@@ -133,7 +142,7 @@ public class TranscationsManager {
     }
 
     public boolean addCars(int id, String location, int numCars, int price) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
         resetTimer(id);
         UpdateMask(id, CARS_FLAG);
@@ -141,7 +150,7 @@ public class TranscationsManager {
     }
 
     public boolean addRooms(int id, String location, int numRooms, int price) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
         resetTimer(id);
         UpdateMask(id, ROOMS_FLAG);
@@ -149,7 +158,7 @@ public class TranscationsManager {
     }
 
     public int newCustomer(int id) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
         resetTimer(id);
         int newCid = Integer.parseInt(
@@ -164,7 +173,7 @@ public class TranscationsManager {
     }
 
     public boolean newCustomer(int id, int cid) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
         resetTimer(id);
 
@@ -172,14 +181,15 @@ public class TranscationsManager {
         UpdateMask(id, CARS_FLAG);
         UpdateMask(id, ROOMS_FLAG);
         if (GetRoomsManager().newCustomer(id, cid) && GetCarsManager().newCustomer(id, cid) && GetFlightsManager().newCustomer(id, cid)) {
-            aliveCustomerIds.add(cid);
+            state.aliveCustomerIds.add(cid);
+            saveState();
             return true;
         }
         return false;
     }
 
     public boolean deleteFlight(int id, int flightNum) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
         resetTimer(id);
         UpdateMask(id, FLIGHTS_FLAG);
@@ -189,7 +199,7 @@ public class TranscationsManager {
 
     public boolean deleteCars(int id, String location) throws RemoteException, InvalidTransactionException, DeadlockException {
         resetTimer(id);
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
         resetTimer(id);
         UpdateMask(id, CARS_FLAG);
@@ -197,7 +207,7 @@ public class TranscationsManager {
     }
 
     public boolean deleteRooms(int id, String location) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
         resetTimer(id);
         UpdateMask(id, ROOMS_FLAG);
@@ -206,9 +216,9 @@ public class TranscationsManager {
 
 
     public boolean deleteCustomer(int id, int customerID) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
-        if (!aliveCustomerIds.contains(customerID))
+        if (!state.aliveCustomerIds.contains(customerID))
             throw new RemoteException("Customer " + customerID + " does not exist.");
         resetTimer(id);
         UpdateMask(id, FLIGHTS_FLAG);
@@ -216,14 +226,15 @@ public class TranscationsManager {
         UpdateMask(id, ROOMS_FLAG);
         Boolean deleted = (GetRoomsManager().deleteCustomer(id, customerID) && GetCarsManager().deleteCustomer(id, customerID) && GetFlightsManager().deleteCustomer(id, customerID));
         if (deleted) {
-            aliveCustomerIds.remove(customerID);
+            state.aliveCustomerIds.remove(customerID);
+            saveState();
         }
         return deleted;
     }
 
 
     public int queryFlight(int id, int flightNumber) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
         resetTimer(id);
         UpdateMask(id, FLIGHTS_FLAG);
@@ -232,7 +243,7 @@ public class TranscationsManager {
 
 
     public int queryCars(int id, String location) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
         resetTimer(id);
         UpdateMask(id, CARS_FLAG);
@@ -241,7 +252,7 @@ public class TranscationsManager {
 
 
     public int queryRooms(int id, String location) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Invalid xid.");
         resetTimer(id);
         UpdateMask(id, ROOMS_FLAG);
@@ -250,10 +261,10 @@ public class TranscationsManager {
 
 
     public String queryCustomerInfo(int id, int customerID) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Querying with invalid xid.");
         resetTimer(id);
-        if (!aliveCustomerIds.contains(customerID))
+        if (!state.aliveCustomerIds.contains(customerID))
             throw new RemoteException("Customer " + customerID + " does not exist.");
         UpdateMask(id, FLIGHTS_FLAG);
         UpdateMask(id, CARS_FLAG);
@@ -263,7 +274,7 @@ public class TranscationsManager {
 
 
     public int queryFlightPrice(int id, int flightNumber) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Querying with invalid xid.");
         resetTimer(id);
         UpdateMask(id, FLIGHTS_FLAG);
@@ -272,7 +283,7 @@ public class TranscationsManager {
 
 
     public int queryCarsPrice(int id, String location) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Querying with invalid xid.");
         resetTimer(id);
         UpdateMask(id, CARS_FLAG);
@@ -281,7 +292,7 @@ public class TranscationsManager {
 
 
     public int queryRoomsPrice(int id, String location) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Querying with invalid xid.");
         resetTimer(id);
         UpdateMask(id, ROOMS_FLAG);
@@ -290,10 +301,10 @@ public class TranscationsManager {
 
 
     public boolean reserveFlight(int id, int customerID, int flightNumber) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Reserving with invalid xid.");
         resetTimer(id);
-        if (!aliveCustomerIds.contains(customerID))
+        if (!state.aliveCustomerIds.contains(customerID))
             throw new RemoteException("Customer " + customerID + " does not exist.");
         UpdateMask(id, FLIGHTS_FLAG);
         return GetFlightsManager().reserveFlight(id, customerID, flightNumber);
@@ -301,10 +312,10 @@ public class TranscationsManager {
 
 
     public boolean reserveCar(int id, int customerID, String location) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Reserving with invalid xid");
         resetTimer(id);
-        if (!aliveCustomerIds.contains(customerID))
+        if (!state.aliveCustomerIds.contains(customerID))
             throw new RemoteException("Customer " + customerID + " does not exist.");
         UpdateMask(id, CARS_FLAG);
         return GetCarsManager().reserveCar(id, customerID, location);
@@ -312,10 +323,10 @@ public class TranscationsManager {
 
 
     public boolean reserveRoom(int id, int customerID, String location) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Reserving with invalid xid");
         resetTimer(id);
-        if (!aliveCustomerIds.contains(customerID))
+        if (!state.aliveCustomerIds.contains(customerID))
             throw new RemoteException("Customer " + customerID + " does not exist.");
         UpdateMask(id, ROOMS_FLAG);
         return GetRoomsManager().reserveRoom(id, customerID, location);
@@ -323,10 +334,10 @@ public class TranscationsManager {
 
 
     public boolean bundle(int id, int customerID, Vector<String> flightNumbers, String location, boolean car, boolean room) throws RemoteException, InvalidTransactionException, DeadlockException {
-        if (!pendingXids.contains(id))
+        if (!state.pendingXids.contains(id))
             throw new InvalidTransactionException(id, "Bundle with invalid xid");
         resetTimer(id);
-        if (!aliveCustomerIds.contains(customerID))
+        if (!state.aliveCustomerIds.contains(customerID))
             throw new RemoteException("Customer " + customerID + " does not exist.");
 
         if (car) {
@@ -378,12 +389,13 @@ public class TranscationsManager {
             int new_xid = idGen++;
 
             Log("START-TX " + new_xid);
-            pendingXids.add(new_xid);
-            involvementMask.put(new_xid, 0);
+            state.pendingXids.add(new_xid);
+            state.involvementMask.put(new_xid, 0);
 
             // Schedule a timer for the transaction.
             System.out.println("Starting the timer for " + new_xid);
-            xidTimer.put(new_xid, System.currentTimeMillis());
+            state.xidTimer.put(new_xid, System.currentTimeMillis());
+            saveState();
             return new_xid;
         }
     }
@@ -397,7 +409,6 @@ public class TranscationsManager {
                 System.out.println("Couldn't access one of the required resource managers for " + transactionId);
             }
         }
-
 
         ArrayList<Future<Boolean>> votes = new ArrayList<>();
         if (requiredServers.size() > 0) {
@@ -468,6 +479,9 @@ public class TranscationsManager {
         List<IResourceManager> requiredServers = GetRequiredServers(transactionId);
 
         boolean success = true;
+
+        state.transactionStates.put(transactionId, "Start");
+
         crashIfModeIs(IResourceManager.TransactionManagerCrashModes.BEFORE_SEND_VOTE_REQ);
         if (!DecisionPhase(transactionId, VotingPhase(transactionId, requiredServers), requiredServers)) {
             System.out.println("2PC-"+transactionId+": failed, retrying in "+TWOPHASECOMMIT_DELAY/1000+" Seconds...");
@@ -488,15 +502,18 @@ public class TranscationsManager {
     }
 
     public boolean commit(int transactionId) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        if (!pendingXids.contains(transactionId)) {
+        if (!state.pendingXids.contains(transactionId)) {
             throw new InvalidTransactionException(transactionId, "Invalid commit xid.");
         }
+        Log("START-2PC " + transactionId);
 
         boolean protocolSuccess = TwoPC_Protocol(transactionId);
 
         if (protocolSuccess) {
-            pendingXids.remove(transactionId);
+            state.pendingXids.remove(transactionId);
             stopTimer(transactionId);
+            state.transactionStates.put(transactionId, "Commit");
+            saveState();
             return true;
         } else {
             abort(transactionId);
@@ -505,15 +522,16 @@ public class TranscationsManager {
     }
 
     public void abort(int transactionId) throws RemoteException, InvalidTransactionException {
-        if (!pendingXids.contains(transactionId)) {
+        if (!state.pendingXids.contains(transactionId)) {
             throw new InvalidTransactionException(transactionId, "Invalid commit xid.");
         }
         Log("ABORT-2PC " + transactionId);
-        pendingXids.remove(transactionId);
+        state.pendingXids.remove(transactionId);
         stopTimer(transactionId);
 
-        int invo_mask = involvementMask.get(transactionId);
-        involvementMask.remove(transactionId);
+        int invo_mask = state.involvementMask.get(transactionId);
+        state.involvementMask.remove(transactionId);
+        saveState();
 
         if ((invo_mask & FLIGHTS_FLAG) != 0)
             GetFlightsManager().abort(transactionId);
@@ -521,6 +539,9 @@ public class TranscationsManager {
             GetRoomsManager().abort(transactionId);
         if ((invo_mask & CARS_FLAG) != 0)
             GetCarsManager().abort(transactionId);
+
+        state.transactionStates.put(transactionId, "Abort");
+        saveState();
     }
 
     public boolean shutdown() throws RemoteException {
@@ -536,7 +557,7 @@ public class TranscationsManager {
 
     private List<IResourceManager> GetRequiredServers(int transactionId) {
         List<IResourceManager> requiredServers = new ArrayList<>();
-        int invo_mask = involvementMask.get(transactionId);
+        int invo_mask = state.involvementMask.get(transactionId);
         if ((invo_mask & FLIGHTS_FLAG) != 0) {
             requiredServers.add(GetFlightsManager());
         }
@@ -561,13 +582,61 @@ public class TranscationsManager {
         }
     }
 
+
     public boolean SetCrashMode(IResourceManager.TransactionManagerCrashModes mode) {
         this.mode = mode;
         return true;
     }
 
-    private void recover() {
-        // TODO(abudan): Implement this
+    private void recoverState() {
+        try (ObjectInputStream ios =
+                     new ObjectInputStream(new FileInputStream(stateFilename))) {
+
+            state = (TranscationsManagerState) ios.readObject();
+
+            for(int xid : state.pendingXids){
+                // Does not find a Start-2PC record but transaction active, you abort
+                if (!state.transactionStates.containsKey(xid)){
+                    abort(xid);
+                }
+                else
+                {
+                    // Finds a Start-2PC record, abort (or resend vote request but we don't)
+                    if(state.transactionStates.get(xid).equals("Start")){
+                        abort(xid);
+                    }
+                    // Resend commit request
+                    else if (state.transactionStates.get(xid).equals("Commit")){
+                        commit(xid);
+                    }
+                    // Resend abort request
+                    else if (state.transactionStates.get(xid).equals("Abort")){
+                        abort(xid);
+                    }
+                }
+            }
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private void saveState() {
+        try (ObjectOutputStream oos =
+                     new ObjectOutputStream(new FileOutputStream(stateFilename))) {
+
+            oos.writeObject(state);
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
 

@@ -223,11 +223,9 @@ public class RMIMiddleware implements IResourceManager {
         return txManager.deleteCustomer(id, customerID);
     }
 
-
     public int queryFlight(int id, int flightNumber) throws RemoteException, InvalidTransactionException, DeadlockException {
         return txManager.queryFlight(id, flightNumber);
     }
-
 
     public int queryCars(int id, String location) throws RemoteException, InvalidTransactionException, DeadlockException {
         return txManager.queryCars(id, location);

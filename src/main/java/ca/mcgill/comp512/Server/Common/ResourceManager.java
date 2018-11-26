@@ -27,10 +27,11 @@ public class ResourceManager implements IResourceManager {
     private HashSet<Integer> pendingXids = new HashSet<>();
     private ResourceManagerCrashModes mode = ResourceManagerCrashModes.NONE;
     private String storageKey = "StorageKey";
+    private Map<Integer, String> transactionStates = new HashMap<>();
 
     // 0: masterRecordFilename
     // 1: masterFilename
-    // 2: shaowFilename
+    // 2: shadowFilename
     // 3: logFilename
     private String[] filenames = {"", "", "", ""};
     private Boolean logAccess = true;
@@ -184,6 +185,7 @@ public class ResourceManager implements IResourceManager {
                     for (Integer xid : pendingXids) {
                         if (System.currentTimeMillis() - xidTimer.get(xid) > TIME_TO_LIVE_MS) {
                             abort(xid);
+                            transactionStates.put(xid, "Abort")
                         }
                     }
                     Thread.sleep(1000);
