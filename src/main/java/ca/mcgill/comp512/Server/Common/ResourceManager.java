@@ -645,39 +645,6 @@ public class ResourceManager implements IResourceManager {
      * @throws RemoteException
      */
     public boolean shutdown() throws RemoteException {
-//		File log = new File(logFilename);
-//		File masterRecordFile = new File(masterRecordFilename);
-//		File shadowFile = new File(shadowFilename);
-//		File masterFile = new File(masterFilename);
-//
-//		if (log.exists()) {
-//			log.delete();
-//		} else {
-//			System.err.println(logFilename + " is missing on shutdown!");
-//			return false;
-//		}
-//
-//		if (masterRecordFile.exists()) {
-//			masterRecordFile.delete();
-//		} else {
-//			System.err.println(masterRecordFile + " is missing on shutdown!");
-//			return false;
-//		}
-//
-//		if (shadowFile.exists()) {
-//			shadowFile.delete();
-//		} else {
-//			System.err.println(shadowFile + " is missing on shutdown!");
-//			return false;
-//		}
-//
-//		if (masterFile.exists()) {
-//			masterFile.delete();
-//		} else {
-//			System.err.println(masterFile + " is missing on shutdown!");
-//			return false;
-//		}
-
         new Thread(() -> {
             try {
                 Thread.sleep(3000);
@@ -695,6 +662,7 @@ public class ResourceManager implements IResourceManager {
         crashIfModeIs(ResourceManagerCrashModes.AFTER_REC_VOTE_REQ);
         boolean vote = true;
         if (!pendingXids.contains(xid)) {
+            abort(xid);
             vote = false;
         }
         crashIfModeIs(ResourceManagerCrashModes.AFTER_SENDING_ANSWER);

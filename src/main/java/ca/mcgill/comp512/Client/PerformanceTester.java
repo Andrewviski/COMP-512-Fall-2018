@@ -24,7 +24,7 @@ public class PerformanceTester {
             System.setSecurityManager(new SecurityManager());
         }
 
-        client.connectServer();
+        client.connectMiddleware();
     }
 
     private void launchTest(int loopCount, int transactionPerSecond) {

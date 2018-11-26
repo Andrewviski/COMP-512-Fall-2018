@@ -49,7 +49,7 @@ public class Tester {
         if (System.getSecurityManager() == null) {
             System.setSecurityManager(new SecurityManager());
         }
-        tester_client.connectServer();
+        tester_client.connectMiddleware();
         return tester_client;
     }
 

@@ -4,85 +4,70 @@ import ca.mcgill.comp512.LockManager.DeadlockException;
 import ca.mcgill.comp512.LockManager.TransactionAbortedException;
 import ca.mcgill.comp512.Server.Interface.IResourceManager;
 
-import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Vector;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RMIMiddleware implements IResourceManager {
-    private final int HEARTBEAT_FREQUENCY = 15000;
+    private static int HEARTBEAT_FREQUENCY = 2000;
+    private static boolean HeartbeatOutputEnabled=true;
     private static String middlwareName = "Middleware";
     private static String s_rmiPrefix = "group16_";
 
     private static final int SERVER_COUNT = 3;
-
     public static final int middlewarePort = 54006;
+
 
     // These arrays will store server names, server hostnames, and resource managers for each resources in
     // the following order: Flights, Rooms, Cars, Customers.
-    private static String[] server_name = {"Flights", "Rooms", "Cars"};
-    private static String[] server_hostname = {"localhost", "localhost", "localhost"};
+    private static String[] server_names = {"Flights", "Rooms", "Cars"};
+    private static String[] server_hostnames = {"localhost", "localhost", "localhost"};
     private static int server_ports[] = {54002, 54003, 54004};
-    private static boolean dead[] = {false, false, false};
+    public HashMap<String,AtomicBoolean> dead = new HashMap<>();
     private static IResourceManager[] resourceManagers = new IResourceManager[SERVER_COUNT];
     private TranscationsManager txManager;
 
     RMIMiddleware() {
-        // Create a heartbeat thread
-        new Thread(() -> {
-            while (true) {
-                try {
-                    Thread.sleep(HEARTBEAT_FREQUENCY);
-                    for (int i = 0; i < SERVER_COUNT; i++) {
-                        if (!dead[i]) {
-                            try {
-                                resourceManagers[i].getName();
-                            } catch (Exception e) {
-                                if (!connectServer(server_hostname[i], server_ports[i], server_name[i], i)) {
-                                    dead[i] = true;
-                                    System.out.println(server_name[i] + " died, disconnecting!");
-                                }
-                            }
-                        } else {
-                            if (connectServer(server_hostname[i], server_ports[i], server_name[i], i)) {
-                                dead[i] = false;
-                                System.out.println(server_name[i] + " is alive, reconnected!");
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-
-                }
-            }
-        }).start();
-
+        dead.put("Flights",new AtomicBoolean(true));
+        dead.put("Cars",new AtomicBoolean(true));
+        dead.put("Rooms",new AtomicBoolean(true));
         txManager = new TranscationsManager(this);
     }
 
     // Resource managers accessors.
     public IResourceManager GetFlightsManager() {
-        if (dead[0])
+        if (dead.get("Flights").get())
             throw new DeadResourceManagerException("Flights", "");
         return resourceManagers[0];
     }
 
     public IResourceManager GetRoomsManager() {
-        if (dead[1])
+        if (dead.get("Cars").get())
             throw new DeadResourceManagerException("Rooms", "");
         return resourceManagers[1];
     }
 
     public IResourceManager GetCarsManager() {
-        if (dead[2])
+        if (dead.get("Rooms").get())
             throw new DeadResourceManagerException("Cars", "");
         return resourceManagers[2];
     }
 
+    private static void ReportHeartbeat(String msg) {
+        if(!HeartbeatOutputEnabled)
+            return;
+        System.err.println(msg);
+    }
+
+
     private static void ReportMiddleWareError(String msg, Exception e) {
         System.err.println((char) 27 + "[31;1mMiddleware exception: " + (char) 27 + "[0m" + msg + " ]");
+        e.printStackTrace();
         System.exit(1);
     }
 
@@ -96,7 +81,33 @@ public class RMIMiddleware implements IResourceManager {
             RMIMiddleware middleware = new RMIMiddleware();
             middleware.parseServersConfig(args);
             middleware.setup();
-            middleware.connectToServers();
+            middleware.searchForServers();
+
+            // Create a heartbeat thread
+            new Thread(() -> {
+                while (true) {
+                    try {
+                        Thread.sleep(HEARTBEAT_FREQUENCY);
+                        for(int i=0;i<SERVER_COUNT;i++) {
+                            if (!middleware.dead.get(server_names[i]).get()) {
+                                try {
+                                    middleware.resourceManagers[i].getName();
+                                } catch (Exception e) {
+                                    middleware.dead.get(server_names[i]).set(true);
+                                    ReportHeartbeat(server_names[i] + " died, disconnecting!");
+                                }
+                            } else {
+                                middleware.connectToServer(i);
+                                if (!middleware.dead.get(server_names[i]).get())
+                                    ReportHeartbeat(server_names[i] + " is alive, reconnected!");
+                            }
+                        }
+                    } catch (Exception e) {
+                        ReportHeartbeat("Heartbreat exception at middleware");
+                    }
+                }
+            }).start();
+
             System.out.println("Middleware is ready and listening on port " + middlewarePort);
         } catch (Exception e) {
             ReportMiddleWareError("Uncaught Exception", e);
@@ -108,7 +119,7 @@ public class RMIMiddleware implements IResourceManager {
             return;
         // Parse hostnames and port numbers.
         for (int i = 0; i < SERVER_COUNT; i++) {
-            server_hostname[i] = args[i];
+            server_hostnames[i] = args[i];
             if (args.length > 4) {
                 try {
                     server_ports[i] = Integer.parseInt(args[SERVER_COUNT + i]);
@@ -154,33 +165,51 @@ public class RMIMiddleware implements IResourceManager {
         }
     }
 
-    private void connectToServers() {
+    private void searchForServers() {
         for (int i = 0; i < SERVER_COUNT; i++)
-            connectServer(server_hostname[i], server_ports[i], server_name[i], i);
+            searchForServer(i);
         System.out.println("Middleware up on port " + middlewarePort + " and connected to servers on ports: " + Arrays.toString(server_ports));
     }
 
-    public boolean connectServer(String server_host, int port, String server_name, int resource_manager_index) {
+    public void searchForServer(int resource_manager_index) {
+        String server_host= server_hostnames[resource_manager_index];
+        int port=server_ports[resource_manager_index];
+        String server_name=server_names[resource_manager_index];
+
         try {
-            boolean firstAttempt = true;
             while (true) {
                 try {
                     Registry registry = LocateRegistry.getRegistry(server_host, port);
                     resourceManagers[resource_manager_index] = (IResourceManager) registry.lookup(s_rmiPrefix + server_name);
-                    System.out.println("Connected to server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_name + "]");
-                    return true;
-                } catch (NotBoundException | RemoteException e) {
-                    if (firstAttempt) {
-                        ReportMiddleWareError("Waiting for Server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_name + "]", e);
-                        firstAttempt = false;
-                    }
+                    System.out.println("Connected to server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_names[resource_manager_index] + "]");
+                    dead.get(server_name).set(false);
+                    return;
+                } catch (Exception e) {
+                    System.out.println("Waiting for Server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_names[resource_manager_index] + "]");
                 }
-                Thread.sleep(500);
+                Thread.sleep(1000);
             }
         } catch (Exception e) {
             ReportMiddleWareError("Cannot connect to " + server_name + " at(" + server_host + ":" + port + ")", e);
         }
-        return false;
+        dead.get(server_name).set(true);
+    }
+
+    public void connectToServer(int resource_manager_index) {
+        String server_host= server_hostnames[resource_manager_index];
+        int port=server_ports[resource_manager_index];
+        String server_name=server_names[resource_manager_index];
+
+        try {
+            Registry registry = LocateRegistry.getRegistry(server_host, port);
+            resourceManagers[resource_manager_index] = (IResourceManager) registry.lookup(s_rmiPrefix + server_name);
+            ReportHeartbeat("Connected to server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_names[resource_manager_index]+ "]");
+            dead.get(server_name).set(false);
+            return;
+        } catch (Exception e) {
+            ReportHeartbeat("Checking if Server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_names[resource_manager_index] + "] has recovered");
+        }
+        dead.get(server_name).set(true);
     }
 
     public boolean addFlight(int id, int flightNum, int flightSeats, int flightPrice) throws RemoteException, InvalidTransactionException, DeadlockException {
@@ -321,11 +350,15 @@ public class RMIMiddleware implements IResourceManager {
 
     @Override
     public boolean crashMiddleware(TransactionManagerCrashModes mode) throws RemoteException {
+        if (mode == null)
+            return false;
         return this.txManager.SetCrashMode(mode);
     }
 
     @Override
     public boolean crashResourceManager(String name, ResourceManagerCrashModes mode) throws RemoteException {
+        if (mode == null)
+            return false;
         switch (name) {
             case "Flights":
                 return GetFlightsManager().crashResourceManager("Flights", mode);

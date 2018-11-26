@@ -34,7 +34,7 @@ public enum Command {
 
     ResetCrashes("Reset crashes in the whole system", ""),
     CrashMiddleware("Set a crash mode for the middleware", "<mode>"),
-    CrashReourceManager("Set a crash mode for a resource manager", "<name>,<mode>"),
+    CrashResourceManager("Set a crash mode for a resource manager", "<name>,<mode>"),
 
     Bundle("Book N flight numbers, and optionally a room and/or car at a location", "<xid>,<CustomerID>,<FlightNumber1>...<FlightNumberN>,<Location>,<Car-Y/N>,<Room-Y/N>"),
 
