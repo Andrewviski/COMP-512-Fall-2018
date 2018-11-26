@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RMIMiddleware implements IResourceManager {
     private static int HEARTBEAT_FREQUENCY = 2000;
-    private static boolean HeartbeatOutputEnabled=true;
+    private static boolean HeartbeatOutputEnabled = true;
     private static String middlwareName = "Middleware";
     private static String s_rmiPrefix = "group16_";
 
@@ -28,14 +28,14 @@ public class RMIMiddleware implements IResourceManager {
     private static String[] server_names = {"Flights", "Rooms", "Cars"};
     private static String[] server_hostnames = {"localhost", "localhost", "localhost"};
     private static int server_ports[] = {54002, 54003, 54004};
-    public HashMap<String,AtomicBoolean> dead = new HashMap<>();
+    public HashMap<String, AtomicBoolean> dead = new HashMap<>();
     private static IResourceManager[] resourceManagers = new IResourceManager[SERVER_COUNT];
     private TranscationsManager txManager;
 
     RMIMiddleware() {
-        dead.put("Flights",new AtomicBoolean(true));
-        dead.put("Cars",new AtomicBoolean(true));
-        dead.put("Rooms",new AtomicBoolean(true));
+        dead.put("Flights", new AtomicBoolean(true));
+        dead.put("Cars", new AtomicBoolean(true));
+        dead.put("Rooms", new AtomicBoolean(true));
         txManager = new TranscationsManager(this);
     }
 
@@ -59,7 +59,7 @@ public class RMIMiddleware implements IResourceManager {
     }
 
     private static void ReportHeartbeat(String msg) {
-        if(!HeartbeatOutputEnabled)
+        if (!HeartbeatOutputEnabled)
             return;
         System.err.println(msg);
     }
@@ -88,7 +88,7 @@ public class RMIMiddleware implements IResourceManager {
                 while (true) {
                     try {
                         Thread.sleep(HEARTBEAT_FREQUENCY);
-                        for(int i=0;i<SERVER_COUNT;i++) {
+                        for (int i = 0; i < SERVER_COUNT; i++) {
                             if (!middleware.dead.get(server_names[i]).get()) {
                                 try {
                                     middleware.resourceManagers[i].getName();
@@ -166,44 +166,58 @@ public class RMIMiddleware implements IResourceManager {
     }
 
     private void searchForServers() {
-        for (int i = 0; i < SERVER_COUNT; i++)
-            searchForServer(i);
+        boolean[] found = new boolean[SERVER_COUNT];
+        while (true) {
+
+            // check if we are done and stop the search in that case.
+            boolean done = true;
+            for (int i = 0; i < SERVER_COUNT; i++)
+                done &= found[i];
+            if(done)
+                break;
+
+            // sleep for 1 sec then try again.
+            try {
+                Thread.sleep(1000);
+            } catch (Exception e){
+                ReportMiddleWareError("Cannot find servers",e);
+            }
+
+            for (int i = 0; i < SERVER_COUNT; i++) {
+                if(!found[i])
+                    found[i]=searchForServer(i);
+            }
+        }
         System.out.println("Middleware up on port " + middlewarePort + " and connected to servers on ports: " + Arrays.toString(server_ports));
     }
 
-    public void searchForServer(int resource_manager_index) {
-        String server_host= server_hostnames[resource_manager_index];
-        int port=server_ports[resource_manager_index];
-        String server_name=server_names[resource_manager_index];
-
-        try {
-            while (true) {
-                try {
-                    Registry registry = LocateRegistry.getRegistry(server_host, port);
-                    resourceManagers[resource_manager_index] = (IResourceManager) registry.lookup(s_rmiPrefix + server_name);
-                    System.out.println("Connected to server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_names[resource_manager_index] + "]");
-                    dead.get(server_name).set(false);
-                    return;
-                } catch (Exception e) {
-                    System.out.println("Waiting for Server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_names[resource_manager_index] + "]");
-                }
-                Thread.sleep(1000);
-            }
-        } catch (Exception e) {
-            ReportMiddleWareError("Cannot connect to " + server_name + " at(" + server_host + ":" + port + ")", e);
-        }
-        dead.get(server_name).set(true);
-    }
-
-    public void connectToServer(int resource_manager_index) {
-        String server_host= server_hostnames[resource_manager_index];
-        int port=server_ports[resource_manager_index];
-        String server_name=server_names[resource_manager_index];
+    public boolean searchForServer(int resource_manager_index) {
+        String server_host = server_hostnames[resource_manager_index];
+        int port = server_ports[resource_manager_index];
+        String server_name = server_names[resource_manager_index];
 
         try {
             Registry registry = LocateRegistry.getRegistry(server_host, port);
             resourceManagers[resource_manager_index] = (IResourceManager) registry.lookup(s_rmiPrefix + server_name);
-            ReportHeartbeat("Connected to server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_names[resource_manager_index]+ "]");
+            System.out.println("Connected to server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_names[resource_manager_index] + "]");
+            dead.get(server_name).set(false);
+            return true;
+        } catch (Exception e) {
+            System.out.println("Waiting for Server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_names[resource_manager_index] + "]");
+        }
+        dead.get(server_name).set(true);
+        return false;
+    }
+
+    public void connectToServer(int resource_manager_index) {
+        String server_host = server_hostnames[resource_manager_index];
+        int port = server_ports[resource_manager_index];
+        String server_name = server_names[resource_manager_index];
+
+        try {
+            Registry registry = LocateRegistry.getRegistry(server_host, port);
+            resourceManagers[resource_manager_index] = (IResourceManager) registry.lookup(s_rmiPrefix + server_name);
+            ReportHeartbeat("Connected to server [" + server_host + ":" + port + "/" + s_rmiPrefix + server_names[resource_manager_index] + "]");
             dead.get(server_name).set(false);
             return;
         } catch (Exception e) {

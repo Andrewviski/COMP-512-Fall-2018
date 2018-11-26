@@ -47,7 +47,7 @@ public abstract class Client {
 
             try {
                 if (middleware_dead.get()) {
-                    System.err.println((char) 27 + "[31;1mMiddleware is dead: " + (char) 27 + "[0m");
+                    System.err.println((char) 27 + "[31;1mMiddleware is dead " + (char) 27 + "[0m");
                     continue;
                 }
                 arguments = parse(command);
