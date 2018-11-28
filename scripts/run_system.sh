@@ -6,6 +6,7 @@ cd scripts/
 function ctrl_c() {
         echo "Deleting files"
         ./clean_files.sh
+        kill_all.sh
         exit 0
 }
 
@@ -35,13 +36,6 @@ if [ $1 = "local" ]; then
     sleep 1
     ./run_middleware.sh localhost localhost localhost ${PORTS[0]} ${PORTS[1]} ${PORTS[2]} &
     echo 'Done!'
-
-    # only exit with a ctrl-c
-    while :
-    do
-	    sleep 0.1
-    done
-
 fi
 
 if [ $1 = "local-split" ]; then
