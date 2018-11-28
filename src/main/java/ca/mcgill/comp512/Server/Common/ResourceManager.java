@@ -15,6 +15,7 @@ import ca.mcgill.comp512.Server.Interface.IResourceManager;
 import java.io.*;
 import java.rmi.RemoteException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ResourceManager implements IResourceManager {
     private static final String storageKey = "StorageKey";
@@ -83,12 +84,15 @@ public class ResourceManager implements IResourceManager {
         new Thread(() -> {
             while (true) {
                 try {
-                    for (Integer xid : state.pendingXids) {
-                        if (System.currentTimeMillis() - state.xidTimer.get(xid) > TIME_TO_LIVE_MS) {
-                            abort(xid);
-                            state.transactionStates.put(xid, "Abort");
+
+                        for (Integer xid : state.pendingXids) {
+                            if (System.currentTimeMillis() - state.xidTimer.get(xid) > TIME_TO_LIVE_MS) {
+                                abort(xid);
+                                state.transactionStates.put(xid, "Abort");
+                            }
                         }
-                    }
+
+
                     Thread.sleep(1000);
                 } catch (InvalidTransactionException e) {
                     System.err.println("Failed to abort transaction-" + e.getXId() + " in the timeout thread");
@@ -261,7 +265,10 @@ public class ResourceManager implements IResourceManager {
     }
 
     private void addPendingTransaction(int xid) {
-        state.pendingXids.add(xid);
+
+            state.pendingXids.add(xid);
+
+
         if (state.xidTimer.containsKey(xid)) {
             resetTimer(xid);
         } else {
@@ -597,7 +604,9 @@ public class ResourceManager implements IResourceManager {
             System.out.println("Writing " + transactionId + " to disk");
             WriteToDisk(transactionId);
 
-            state.pendingXids.remove(transactionId);
+
+                state.pendingXids.remove(transactionId);
+
             stopTimer(transactionId);
             state.lockManager.UnlockAll(transactionId);
             state.writeSets.remove(transactionId);
@@ -618,7 +627,9 @@ public class ResourceManager implements IResourceManager {
         // TODO: akaba, this will create a bug where a non 2PC thing is going to call abort.
         crashIfModeIs(ResourceManagerCrashModes.AFTER_REC_DECISION);
         System.out.println("Aborting " + transactionId);
-        state.pendingXids.remove(transactionId);
+
+            state.pendingXids.remove(transactionId);
+
         stopTimer(transactionId);
         state.writeSets.remove(transactionId);
         state.lockManager.UnlockAll(transactionId);
@@ -751,7 +762,7 @@ public class ResourceManager implements IResourceManager {
         private Map<Integer, HashMap<String, Character>> latestOp = new HashMap<>();
         private Map<Integer, Long> xidTimer = new HashMap<>();
         private LockManager lockManager;
-        private Set<Integer> pendingXids = new HashSet<>();
+        private Set<Integer> pendingXids = Collections.newSetFromMap(new ConcurrentHashMap<Integer, Boolean>());
         private Map<Integer, String> transactionStates = new HashMap<>();
     }
 }
