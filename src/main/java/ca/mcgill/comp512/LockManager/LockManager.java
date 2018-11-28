@@ -2,10 +2,12 @@ package ca.mcgill.comp512.LockManager;
 
 import ca.mcgill.comp512.Server.Common.Trace;
 
+import java.io.Serializable;
 import java.util.BitSet;
+import java.util.List;
 import java.util.Vector;
 
-public class LockManager {
+public class LockManager implements Serializable {
     private static int TABLE_SIZE = 2039;
     private static int DEADLOCK_TIMEOUT = 10000;
 
@@ -105,15 +107,15 @@ public class LockManager {
 
         TransactionLockObject lockQuery = new TransactionLockObject(xid, "", TransactionLockObject.LockType.LOCK_UNKNOWN); // Only used in elements() call below.
         synchronized (this.lockTable) {
-            Vector vect = this.lockTable.elements(lockQuery);
+            List vect = this.lockTable.elements(lockQuery);
 
             TransactionLockObject xLockObject;
-            Vector waitVector;
+            List waitVector;
             WaitLockObject waitLockObject;
             int size = vect.size();
 
             for (int i = (size - 1); i >= 0; i--) {
-                xLockObject = (TransactionLockObject) vect.elementAt(i);
+                xLockObject = (TransactionLockObject) vect.get(i);
                 this.lockTable.remove(xLockObject);
 
                 Trace.info("LM::unlock(" + xid + ", " + xLockObject.getDataName() + ", " + xLockObject.getLockType() + ") unlocked");
@@ -127,17 +129,17 @@ public class LockManager {
                     waitVector = this.waitTable.elements(dataLockObject);
                     int waitSize = waitVector.size();
                     for (int j = 0; j < waitSize; j++) {
-                        waitLockObject = (WaitLockObject) waitVector.elementAt(j);
+                        waitLockObject = (WaitLockObject) waitVector.get(j);
                         if (waitLockObject.getLockType() == TransactionLockObject.LockType.LOCK_WRITE) {
                             if (j == 0) {
                                 // Get all other transactions which have locks on the
                                 // data item just unlocked
-                                Vector vect1 = this.lockTable.elements(dataLockObject);
+                                List vect1 = this.lockTable.elements(dataLockObject);
                                 int vectlSize = vect1.size();
 
                                 boolean free = true;
                                 for (int k = 0; k < vectlSize; k++) {
-                                    DataLockObject l_dl = (DataLockObject) vect1.elementAt(k);
+                                    DataLockObject l_dl = (DataLockObject) vect1.get(k);
                                     if (l_dl.getXId() != waitLockObject.getXId()) {
                                         // Some other transaction still has a lock on the data item
                                         // just unlocked. So, WRITE lock cannot be granted
@@ -194,15 +196,15 @@ public class LockManager {
 
         TransactionLockObject lockQuery = new TransactionLockObject(xid, "", TransactionLockObject.LockType.LOCK_UNKNOWN); // Only used in elements() call below.
         synchronized (this.lockTable) {
-            Vector vect = this.lockTable.elements(lockQuery);
+            List vect = this.lockTable.elements(lockQuery);
 
             TransactionLockObject xLockObject;
-            Vector waitVector;
+            List waitVector;
             WaitLockObject waitLockObject;
             int size = vect.size();
 
             for (int i = (size - 1); i >= 0; i--) {
-                xLockObject = (TransactionLockObject) vect.elementAt(i);
+                xLockObject = (TransactionLockObject) vect.get(i);
                 if (!xLockObject.getDataName().equals(data))
                 {
                     continue;
@@ -220,17 +222,17 @@ public class LockManager {
                     waitVector = this.waitTable.elements(dataLockObject);
                     int waitSize = waitVector.size();
                     for (int j = 0; j < waitSize; j++) {
-                        waitLockObject = (WaitLockObject) waitVector.elementAt(j);
+                        waitLockObject = (WaitLockObject) waitVector.get(j);
                         if (waitLockObject.getLockType() == TransactionLockObject.LockType.LOCK_WRITE) {
                             if (j == 0) {
                                 // Get all other transactions which have locks on the
                                 // data item just unlocked
-                                Vector vect1 = this.lockTable.elements(dataLockObject);
+                                List vect1 = this.lockTable.elements(dataLockObject);
                                 int vectlSize = vect1.size();
 
                                 boolean free = true;
                                 for (int k = 0; k < vectlSize; k++) {
-                                    DataLockObject l_dl = (DataLockObject) vect1.elementAt(k);
+                                    DataLockObject l_dl = (DataLockObject) vect1.get(k);
                                     if (l_dl.getXId() != waitLockObject.getXId()) {
                                         // Some other transaction still has a lock on the data item
                                         // just unlocked. So, WRITE lock cannot be granted
@@ -283,12 +285,12 @@ public class LockManager {
     // appropriately by the caller. If the lock request is a conversion from READ lock to WRITE lock, then bitset
     // is set.
     private boolean LockConflict(DataLockObject dataLockObject, BitSet bitset) throws DeadlockException, RedundantLockRequestException {
-        Vector vect = this.lockTable.elements(dataLockObject);
+        List vect = this.lockTable.elements(dataLockObject);
         int size = vect.size();
 
         // As soon as a lock that conflicts with the current lock request is found, return true
         for (int i = 0; i < size; i++) {
-            DataLockObject l_dataLockObject = (DataLockObject) vect.elementAt(i);
+            DataLockObject l_dataLockObject = (DataLockObject) vect.get(i);
             if (dataLockObject.getXId() == l_dataLockObject.getXId()) {
                 // The transaction already has a lock on this data item which means that it is either
                 // relocking it or is converting the lock
@@ -357,14 +359,14 @@ public class LockManager {
         WaitLockObject waitLockObject = new WaitLockObject(dataLockObject.getXId(), dataLockObject.getDataName(), dataLockObject.getLockType(), thisThread);
 
         synchronized (this.stampTable) {
-            Vector vect = this.stampTable.elements(timeObject);
+            List vect = this.stampTable.elements(timeObject);
             if (vect.size() == 0) {
                 // add the time stamp for this lock request to stampTable
                 this.stampTable.add(timeObject);
                 timestamp = timeObject;
             } else if (vect.size() == 1) {
                 // Lock operation could have timed out; check for deadlock
-                TimeObject prevStamp = (TimeObject) vect.firstElement();
+                TimeObject prevStamp = (TimeObject) vect.get(0);
                 timestamp = prevStamp;
                 timeBlocked = timeObject.getTime() - prevStamp.getTime();
                 if (timeBlocked >= LockManager.DEADLOCK_TIMEOUT) {

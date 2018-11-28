@@ -17,27 +17,12 @@ import java.rmi.RemoteException;
 import java.util.*;
 
 public class ResourceManager implements IResourceManager {
-
-    // Reloaded from disk upon start
-    protected RMHashMap m_data = new RMHashMap();
-
-    // Do these need to be restored upon recovery?
-    protected HashMap<Integer, HashMap<String, RMItem>> writeSets = new HashMap<>();
-    protected HashMap<Integer, HashMap<String, Character>> latestOp = new HashMap<>();
-    private HashMap<Integer, Long> xidTimer = new HashMap<>();
-    private LockManager lockManager;
-    private HashSet<Integer> pendingXids = new HashSet<>();
-
-    private ResourceManagerCrashModes mode = ResourceManagerCrashModes.NONE;
-
     private static final String storageKey = "StorageKey";
     private static final String trxStateLogFilename = "trxState.log";
     private static final int TIME_TO_LIVE_MS = 15000;
     protected static String name = "Server";
-
-
-    private Map<Integer, String> transactionStates = new HashMap<>();
-
+    ResourceManagerState state = new ResourceManagerState();
+    private ResourceManagerCrashModes mode = ResourceManagerCrashModes.NONE;
     // 0: masterRecordFilename
     // 1: masterFilename
     // 2: shadowFilename
@@ -45,106 +30,9 @@ public class ResourceManager implements IResourceManager {
     private String[] filenames = {"", "", "", ""};
     private Boolean logAccess = true;
 
-    private void stopTimer(int xid) {
-        System.out.println("Stopping the timer for " + xid);
-        xidTimer.remove(xid);
-    }
-
-    private void resetTimer(int xid) {
-        System.out.println("Reseting the timer for " + xid);
-        xidTimer.put(xid, System.currentTimeMillis());
-    }
-
-    private String masterRecordFilename() {
-        return filenames[0];
-    }
-
-    private String masterFilename() {
-        return filenames[1];
-    }
-
-    private String shadowFilename() {
-        return filenames[2];
-    }
-
-    private String logFilename() {
-        return filenames[3];
-    }
-
-    private void Log(String logMessage) {
-        synchronized (logAccess) {
-            try {
-                PrintWriter writer = new PrintWriter(logFilename());
-                writer.println(logMessage);
-                writer.close();
-            } catch (FileNotFoundException fnfe) {
-                System.err.println(logFilename() + " is unexpectedly missing!");
-                fnfe.printStackTrace();
-            } catch (Exception e) {
-                System.err.println("Failed to log [ \"" + logMessage + "\" ] into " + logFilename());
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private void WriteToDisk(int transactionId) {
-        Xlock(transactionId, storageKey);
-        String latest = readMasterRecordFile();
-
-        // Write the object
-        try {
-            ObjectOutputStream objectOut = new ObjectOutputStream(new FileOutputStream((latest.equals(masterFilename())) ? shadowFilename() : masterFilename()));
-            objectOut.writeObject(m_data);
-            objectOut.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        // write to masterRecord
-        try {
-            PrintWriter writer = new PrintWriter(masterRecordFilename());
-            writer.println((latest.equals(masterFilename())) ? shadowFilename() : masterFilename());
-            writer.close();
-        } catch (FileNotFoundException fnfe) {
-            System.err.println(masterRecordFilename() + " is unexpectedly missing!");
-            fnfe.printStackTrace();
-        } catch (Exception e) {
-            System.err.println("Failed to write to MasterRecord");
-            e.printStackTrace();
-        }
-    }
-
-    private String readMasterRecordFile() {
-        String latest = "";
-        try {
-            Scanner sc = new Scanner(new File(masterRecordFilename()));
-            if (!sc.hasNext())
-                throw new Exception();
-            latest = sc.nextLine();
-            sc.close();
-        } catch (Exception e) {
-            System.err.println("Cannot access data on masterRecord");
-            e.printStackTrace();
-        }
-        return latest;
-    }
-
-
-    private boolean Xlock(int id, String name) throws DeadlockException {
-        synchronized (lockManager) {
-            return lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_WRITE);
-        }
-    }
-
-    private boolean Slock(int id, String name) throws DeadlockException {
-        synchronized (lockManager) {
-            return lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_READ);
-        }
-    }
-
     public ResourceManager(String p_name) {
         name = p_name;
-        lockManager = new LockManager();
+        state.lockManager = new LockManager();
 
         filenames[0] = name + "_masterRecord";
         filenames[1] = name + "_master";
@@ -196,10 +84,10 @@ public class ResourceManager implements IResourceManager {
         new Thread(() -> {
             while (true) {
                 try {
-                    for (Integer xid : pendingXids) {
-                        if (System.currentTimeMillis() - xidTimer.get(xid) > TIME_TO_LIVE_MS) {
+                    for (Integer xid : state.pendingXids) {
+                        if (System.currentTimeMillis() - state.xidTimer.get(xid) > TIME_TO_LIVE_MS) {
                             abort(xid);
-                            transactionStates.put(xid, "Abort");
+                            state.transactionStates.put(xid, "Abort");
                         }
                     }
                     Thread.sleep(1000);
@@ -215,29 +103,126 @@ public class ResourceManager implements IResourceManager {
         }).start();
     }
 
+    private void stopTimer(int xid) {
+        System.out.println("Stopping the timer for " + xid);
+        state.xidTimer.remove(xid);
+    }
+
+    private void resetTimer(int xid) {
+        System.out.println("Reseting the timer for " + xid);
+        state.xidTimer.put(xid, System.currentTimeMillis());
+    }
+
+    private String masterRecordFilename() {
+        return filenames[0];
+    }
+
+    private String masterFilename() {
+        return filenames[1];
+    }
+
+    private String shadowFilename() {
+        return filenames[2];
+    }
+
+    private String logFilename() {
+        return filenames[3];
+    }
+
+    private void Log(String logMessage) {
+        synchronized (logAccess) {
+            try {
+                PrintWriter writer = new PrintWriter(logFilename());
+                writer.println(logMessage);
+                writer.close();
+            } catch (FileNotFoundException fnfe) {
+                System.err.println(logFilename() + " is unexpectedly missing!");
+                fnfe.printStackTrace();
+            } catch (Exception e) {
+                System.err.println("Failed to log [ \"" + logMessage + "\" ] into " + logFilename());
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void WriteToDisk(int transactionId) {
+        Xlock(transactionId, storageKey);
+        String latest = readMasterRecordFile();
+
+        // Write the object
+        try {
+            ObjectOutputStream objectOut = new ObjectOutputStream(new FileOutputStream((latest.equals(masterFilename())) ? shadowFilename() : masterFilename()));
+            objectOut.writeObject(state.m_data);
+            objectOut.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // write to masterRecord
+        try {
+            PrintWriter writer = new PrintWriter(masterRecordFilename());
+            writer.println((latest.equals(masterFilename())) ? shadowFilename() : masterFilename());
+            writer.close();
+        } catch (FileNotFoundException fnfe) {
+            System.err.println(masterRecordFilename() + " is unexpectedly missing!");
+            fnfe.printStackTrace();
+        } catch (Exception e) {
+            System.err.println("Failed to write to MasterRecord");
+            e.printStackTrace();
+        }
+    }
+
+    private String readMasterRecordFile() {
+        String latest = "";
+        try {
+            Scanner sc = new Scanner(new File(masterRecordFilename()));
+            if (!sc.hasNext())
+                throw new Exception();
+            latest = sc.nextLine();
+            sc.close();
+        } catch (Exception e) {
+            System.err.println("Cannot access data on masterRecord");
+            e.printStackTrace();
+        }
+        return latest;
+    }
+
+
+    private boolean Xlock(int id, String name) throws DeadlockException {
+        synchronized (state.lockManager) {
+            return state.lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_WRITE);
+        }
+    }
+
+    private boolean Slock(int id, String name) throws DeadlockException {
+        synchronized (state.lockManager) {
+            return state.lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_READ);
+        }
+    }
+
     // Reads a data item
     protected RMItem readData(int xid, String key) throws DeadlockException {
         if (!Slock(xid, key))
             return null;
         // Item has been removed
-        synchronized (latestOp) {
-            if (latestOp.containsKey(xid) && latestOp.get(xid).containsKey(key) && latestOp.get(xid).get(key) == 'd') {
+        synchronized (state.latestOp) {
+            if (state.latestOp.containsKey(xid) && state.latestOp.get(xid).containsKey(key) && state.latestOp.get(xid).get(key) == 'd') {
                 return null;
             }
         }
 
         // Get the updated version
-        synchronized (writeSets) {
-            if (!writeSets.containsKey(xid))
-                writeSets.put(xid, new HashMap<>());
-            HashMap<String, RMItem> writeSet = writeSets.get(xid);
+        synchronized (state.writeSets) {
+            if (!state.writeSets.containsKey(xid))
+                state.writeSets.put(xid, new HashMap<>());
+            HashMap<String, RMItem> writeSet = state.writeSets.get(xid);
             if (writeSet.containsKey(key))
                 return writeSet.get(key);
         }
 
         // Get datastore's version.
-        synchronized (m_data) {
-            RMItem item = m_data.get(key);
+        synchronized (state.m_data) {
+            RMItem item = state.m_data.get(key);
             if (item != null) {
                 return (RMItem) item.clone();
             }
@@ -247,31 +232,31 @@ public class ResourceManager implements IResourceManager {
 
     // Writes a data item
     protected void flushData(String key, RMItem value) {
-        synchronized (m_data) {
-            m_data.put(key, value);
+        synchronized (state.m_data) {
+            state.m_data.put(key, value);
         }
     }
 
     protected void writeTempData(int xid, String key, RMItem value) throws DeadlockException {
         if (!Xlock(xid, key))
             return;
-        synchronized (writeSets) {
-            if (!writeSets.containsKey(xid))
-                writeSets.put(xid, new HashMap<>());
-            HashMap<String, RMItem> writeSet = writeSets.get(xid);
+        synchronized (state.writeSets) {
+            if (!state.writeSets.containsKey(xid))
+                state.writeSets.put(xid, new HashMap<>());
+            HashMap<String, RMItem> writeSet = state.writeSets.get(xid);
             writeSet.put(key, value);
 
             //update latest operation to be a write.
-            if (!latestOp.containsKey(xid))
-                latestOp.put(xid, new HashMap<>());
-            latestOp.get(xid).put(key, 'w');
+            if (!state.latestOp.containsKey(xid))
+                state.latestOp.put(xid, new HashMap<>());
+            state.latestOp.get(xid).put(key, 'w');
         }
     }
 
     // Remove the item out of storage
     protected void flushDataRemoval(String key) {
-        synchronized (m_data) {
-            m_data.remove(key);
+        synchronized (state.m_data) {
+            state.m_data.remove(key);
         }
     }
 
@@ -279,25 +264,25 @@ public class ResourceManager implements IResourceManager {
         if (!Xlock(xid, key))
             return;
 
-        synchronized (writeSets) {
-            if (writeSets.containsKey(xid)) {
-                HashMap<String, RMItem> writeSet = writeSets.get(xid);
+        synchronized (state.writeSets) {
+            if (state.writeSets.containsKey(xid)) {
+                HashMap<String, RMItem> writeSet = state.writeSets.get(xid);
                 writeSet.remove(key);
 
                 //update latest operation to be a remove
-                if (!latestOp.containsKey(xid))
-                    latestOp.put(xid, new HashMap<>());
-                latestOp.get(xid).put(key, 'd');
+                if (!state.latestOp.containsKey(xid))
+                    state.latestOp.put(xid, new HashMap<>());
+                state.latestOp.get(xid).put(key, 'd');
             }
         }
     }
 
     private void addPendingTransaction(int xid) {
-        pendingXids.add(xid);
-        if (xidTimer.containsKey(xid)) {
+        state.pendingXids.add(xid);
+        if (state.xidTimer.containsKey(xid)) {
             resetTimer(xid);
         } else {
-            xidTimer.put(xid, System.currentTimeMillis());
+            state.xidTimer.put(xid, System.currentTimeMillis());
         }
     }
 
@@ -613,14 +598,14 @@ public class ResourceManager implements IResourceManager {
     public synchronized boolean commit(int transactionId) throws RemoteException {
         crashIfModeIs(ResourceManagerCrashModes.AFTER_REC_DECISION);
         System.out.println("Commiting " + transactionId);
-        synchronized (latestOp) {
-            if (latestOp.containsKey(transactionId)) {
-                for (HashMap.Entry<String, Character> entry : latestOp.get(transactionId).entrySet()) {
+        synchronized (state.latestOp) {
+            if (state.latestOp.containsKey(transactionId)) {
+                for (HashMap.Entry<String, Character> entry : state.latestOp.get(transactionId).entrySet()) {
                     if (entry.getValue() == 'd')
                         flushDataRemoval(entry.getKey());
                     else {
-                        synchronized (writeSets) {
-                            flushData(entry.getKey(), writeSets.get(transactionId).get(entry.getKey()));
+                        synchronized (state.writeSets) {
+                            flushData(entry.getKey(), state.writeSets.get(transactionId).get(entry.getKey()));
                         }
                     }
                 }
@@ -629,13 +614,13 @@ public class ResourceManager implements IResourceManager {
             System.out.println("Writing " + transactionId + " to disk");
             WriteToDisk(transactionId);
 
-            pendingXids.remove(transactionId);
+            state.pendingXids.remove(transactionId);
             stopTimer(transactionId);
-            lockManager.UnlockAll(transactionId);
-            writeSets.remove(transactionId);
-            latestOp.remove(transactionId);
+            state.lockManager.UnlockAll(transactionId);
+            state.writeSets.remove(transactionId);
+            state.latestOp.remove(transactionId);
         }
-        transactionStates.put(transactionId, "Commit");
+        state.transactionStates.put(transactionId, "Commit");
         return true;
 
     }
@@ -650,12 +635,12 @@ public class ResourceManager implements IResourceManager {
         // TODO: akaba, this will create a bug where a non 2PC thing is going to call abort.
         crashIfModeIs(ResourceManagerCrashModes.AFTER_REC_DECISION);
         System.out.println("Aborting " + transactionId);
-        pendingXids.remove(transactionId);
+        state.pendingXids.remove(transactionId);
         stopTimer(transactionId);
-        writeSets.remove(transactionId);
-        lockManager.UnlockAll(transactionId);
-        latestOp.remove(transactionId);
-        transactionStates.put(transactionId, "Abort");
+        state.writeSets.remove(transactionId);
+        state.lockManager.UnlockAll(transactionId);
+        state.latestOp.remove(transactionId);
+        state.transactionStates.put(transactionId, "Abort");
     }
 
     /**
@@ -712,9 +697,9 @@ public class ResourceManager implements IResourceManager {
         // Not sure what th point of this? :/
         crashIfModeIs(ResourceManagerCrashModes.AFTER_REC_VOTE_REQ);
         boolean vote = true;
-        if (!pendingXids.contains(xid)) {
+        if (!state.pendingXids.contains(xid)) {
             abort(xid);
-            transactionStates.put(xid, "Abort");
+            state.transactionStates.put(xid, "Abort");
             vote = false;
         }
         crashIfModeIs(ResourceManagerCrashModes.AFTER_SENDING_ANSWER);
@@ -729,7 +714,7 @@ public class ResourceManager implements IResourceManager {
         }).start();
         if (vote) {
 
-            transactionStates.put(xid, "Yes");
+            state.transactionStates.put(xid, "Yes");
             stopTimer(xid);
         }
         return vote;
@@ -764,17 +749,16 @@ public class ResourceManager implements IResourceManager {
                      new ObjectInputStream(new FileInputStream(readMasterRecordFile()));
         ) {
 
-            transactionStates = (Map<Integer, String>) transactionStatesFile.readObject();
-            m_data = (RMHashMap) dataStore.readObject();
+            state = (ResourceManagerState) transactionStatesFile.readObject();
 
-            for (int xid : pendingXids) {
-                if (transactionStates.containsKey(xid)) {
+            for (int xid : state.pendingXids) {
+                if (state.transactionStates.containsKey(xid)) {
                     // Do nothing if you find a commit/abort record
-                    if (transactionStates.get(xid).equals("Commit") || transactionStates.get(xid).equals("Abort")) {
+                    if (state.transactionStates.get(xid).equals("Commit") || state.transactionStates.get(xid).equals("Abort")) {
                         continue;
                     }
                     // Waits indefinitely ¯\_(ツ)_/¯ according to Alex
-                    else if (transactionStates.get(xid).equals("Yes")) {
+                    else if (state.transactionStates.get(xid).equals("Yes")) {
                         continue;
                     } else {
                         // Technically in 2PC we need to send an abort vote to the coordinator, but ok because it will timeout and abort, right?
@@ -782,8 +766,9 @@ public class ResourceManager implements IResourceManager {
                     }
                 }
             }
-
-        } catch (FileNotFoundException e) {
+        } catch (EOFException e) {
+            System.err.println(readMasterRecordFile() + " is empty, nothing to recover");
+        } catch (RemoteException e) {
             e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
@@ -792,12 +777,11 @@ public class ResourceManager implements IResourceManager {
         }
     }
 
-
     private void saveLog() {
         try (ObjectOutputStream oos =
                      new ObjectOutputStream(new FileOutputStream(trxStateLogFilename))) {
 
-            oos.writeObject(transactionStates);
+            oos.writeObject(state);
 
         } catch (FileNotFoundException e) {
             e.printStackTrace();
@@ -810,5 +794,15 @@ public class ResourceManager implements IResourceManager {
         if (this.mode == mode) {
             System.exit(1);
         }
+    }
+
+    private static class ResourceManagerState implements Serializable {
+        private RMHashMap m_data = new RMHashMap();
+        private Map<Integer, HashMap<String, RMItem>> writeSets = new HashMap<>();
+        private Map<Integer, HashMap<String, Character>> latestOp = new HashMap<>();
+        private Map<Integer, Long> xidTimer = new HashMap<>();
+        private LockManager lockManager;
+        private Set<Integer> pendingXids = new HashSet<>();
+        private Map<Integer, String> transactionStates = new HashMap<>();
     }
 }
