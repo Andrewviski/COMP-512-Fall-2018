@@ -94,7 +94,6 @@ public class RMIMiddleware implements IResourceManager {
                 while (true) {
                     try {
                         Thread.sleep(HEARTBEAT_FREQUENCY);
-                        System.out.println(middleware.dead.toString());
                         for (int i = 0; i < SERVER_COUNT; i++) {
                             if (!middleware.dead.get(server_names[i]).get()) {
                                 try {
