@@ -32,3 +32,6 @@ target/
 scripts/Cars*
 scripts/Flights*
 scripts/Rooms*
+
+# Ignore bin files
+*.bin

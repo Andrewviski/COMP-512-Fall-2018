@@ -493,17 +493,21 @@ public abstract class Client {
                     IResourceManager.ResourceManagerCrashModes rm_mode = toResourceManagerMode(toInt(arguments.get(2)));
 
                     if (resourceManager.crashResourceManager(name, rm_mode)) {
-                        System.out.println("Crash mode on "+name+" resourcemanager have been set to " + rm_mode.toString());
+                        System.out.println("Crash mode on " + name + " resourcemanager have been set to " + rm_mode.toString());
                         return true;
                     } else {
                         System.out.println("Failed to set crash mode");
                         return false;
                     }
             }
-        } catch (RemoteException | TransactionAbortedException | InvalidTransactionException | DeadResourceManagerException e) {
+
+        } catch (DeadResourceManagerException e) {
+            System.err.println("Cannot reach remote server!");
+            System.out.println(e.getMessage());
+        } catch (RemoteException | TransactionAbortedException | InvalidTransactionException e) {
             System.out.println(e.getMessage());
         } catch (DeadlockException dle) {
-            System.out.println("The transaction " + dle.getXId() + " is deadlocked and aborted.");
+            System.err.println("The transaction " + dle.getXId() + " is deadlocked and aborted.");
             try {
                 resourceManager.abort(dle.getXId());
             } catch (Exception e) {

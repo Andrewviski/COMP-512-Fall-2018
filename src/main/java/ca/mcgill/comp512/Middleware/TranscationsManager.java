@@ -32,26 +32,8 @@ public class TranscationsManager {
     private TranscationsManagerState state;
     private IResourceManager.TransactionManagerCrashModes mode = IResourceManager.TransactionManagerCrashModes.NONE;
     private final String stateFilename = "transactionManagerState.bin";
-    private final String logFilename = "transactionManager.log";
 
     private Boolean logAccess = true;
-
-    private void Log(String logMessage) {
-        synchronized (logAccess) {
-            try {
-                PrintWriter writer = new PrintWriter(logFilename);
-                writer.println(logMessage);
-                writer.close();
-                System.out.println("\033[0m Log: \033[0m " + logMessage);
-            } catch (FileNotFoundException fnfe) {
-                System.err.println(logFilename + " is unexpectedly missing!");
-                fnfe.printStackTrace();
-            } catch (Exception e) {
-                System.err.println("Failed to log [ \"" + logMessage + "\" ] into " + logFilename);
-                e.printStackTrace();
-            }
-        }
-    }
 
     TranscationsManager(RMIMiddleware ownerMiddleware) {
         this.ownerMiddleware = ownerMiddleware;
@@ -65,7 +47,6 @@ public class TranscationsManager {
             try {
                 System.err.println("Creating " + stateFilename);
                 log.createNewFile();
-                log.deleteOnExit();
             } catch (Exception e) {
                 System.err.println("Failed to create " + stateFilename + " terminating...");
                 e.printStackTrace();
@@ -80,7 +61,6 @@ public class TranscationsManager {
                     for (Integer xid : state.pendingXids) {
                         if (System.currentTimeMillis() - state.xidTimer.get(xid) > TIME_TO_LIVE_MS) {
                             abort(xid);
-
                         }
                     }
                     Thread.sleep(1000);
@@ -125,7 +105,6 @@ public class TranscationsManager {
         int newMask = (state.involvementMask.get(transactionId) | flag);
         state.involvementMask.put(transactionId, newMask);
         saveState();
-        Log(transactionId + " involvementMask " + newMask);
     }
 
     /// ================================= Interface impl ===============================================================
@@ -387,7 +366,6 @@ public class TranscationsManager {
         synchronized (idGen) {
             int new_xid = idGen++;
 
-            Log("START-TX " + new_xid);
             state.pendingXids.add(new_xid);
             state.involvementMask.put(new_xid, 0);
 
@@ -462,7 +440,7 @@ public class TranscationsManager {
                         return false;
                     }
                 } catch (Exception e) {
-                    System.err.println(name+" resource manager did not receive the commit decision [ "+e.getMessage()+" ]");
+                    System.err.println(name + " resource manager did not receive the commit decision [ " + e.getMessage() + " ]");
                 }
             }
             return true;
@@ -478,7 +456,7 @@ public class TranscationsManager {
                         return false;
                     }
                 } catch (Exception e) {
-                    System.err.println(name+" resource manager did not receive the abort decision [ "+e.getMessage()+" ]");
+                    System.err.println(name + " resource manager did not receive the abort decision [ " + e.getMessage() + " ]");
                 }
             }
         }
@@ -511,7 +489,6 @@ public class TranscationsManager {
         if (!state.pendingXids.contains(transactionId)) {
             throw new InvalidTransactionException(transactionId, "Invalid commit xid.");
         }
-        Log("START-2PC " + transactionId);
 
         boolean protocolSuccess = TwoPC_Protocol(transactionId);
 
@@ -531,32 +508,32 @@ public class TranscationsManager {
         if (!state.pendingXids.contains(transactionId)) {
             throw new InvalidTransactionException(transactionId, "Invalid commit xid.");
         }
-        Log("ABORT-2PC " + transactionId);
-        state.pendingXids.remove(transactionId);
+        List<String> requiredServers = GetRequiredServers(transactionId);
+        for (String name : requiredServers) {
+            if (ownerMiddleware.dead.get(name).get()) {
+                System.err.println("Failed to abort, one of the required servers is dead.");
+                return;
+            }
+        }
+
+        for (String name : requiredServers) {
+            getResourceManagerForName(name).abort(transactionId);
+        }
+
         stopTimer(transactionId);
-
-        int invo_mask = state.involvementMask.get(transactionId);
+        state.pendingXids.remove(transactionId);
         state.involvementMask.remove(transactionId);
-        saveState();
-
-        if ((invo_mask & FLIGHTS_FLAG) != 0)
-            GetFlightsManager().abort(transactionId);
-        if ((invo_mask & ROOMS_FLAG) != 0)
-            GetRoomsManager().abort(transactionId);
-        if ((invo_mask & CARS_FLAG) != 0)
-            GetCarsManager().abort(transactionId);
-
         state.transactionStates.put(transactionId, "Abort");
         saveState();
     }
 
     public boolean shutdown() throws RemoteException {
-        File log = new File(logFilename);
+        File log = new File(stateFilename);
         if (log.exists()) {
             log.delete();
             return true;
         } else {
-            System.err.println(logFilename + " is missing on shutdown!");
+            System.err.println(stateFilename + " is missing on shutdown!");
             return false;
         }
     }
@@ -614,23 +591,21 @@ public class TranscationsManager {
 
             state = (TranscationsManagerState) ios.readObject();
 
-            for(int xid : state.pendingXids){
+            for (int xid : state.pendingXids) {
                 // Does not find a Start-2PC record but transaction active, you abort
-                if (!state.transactionStates.containsKey(xid)){
+                if (!state.transactionStates.containsKey(xid)) {
                     abort(xid);
-                }
-                else
-                {
+                } else {
                     // Finds a Start-2PC record, abort (or resend vote request but we don't)
-                    if(state.transactionStates.get(xid).equals("Start")){
+                    if (state.transactionStates.get(xid).equals("Start")) {
                         abort(xid);
                     }
                     // Resend commit request
-                    else if (state.transactionStates.get(xid).equals("Commit")){
+                    else if (state.transactionStates.get(xid).equals("Commit")) {
                         commit(xid);
                     }
                     // Resend abort request
-                    else if (state.transactionStates.get(xid).equals("Abort")){
+                    else if (state.transactionStates.get(xid).equals("Abort")) {
                         abort(xid);
                     }
                 }
@@ -647,15 +622,17 @@ public class TranscationsManager {
     }
 
     private void saveState() {
-        try (ObjectOutputStream oos =
-                     new ObjectOutputStream(new FileOutputStream(stateFilename))) {
+        synchronized (logAccess) {
+            try (ObjectOutputStream oos =
+                         new ObjectOutputStream(new FileOutputStream(stateFilename))) {
 
-            oos.writeObject(state);
+                oos.writeObject(state);
 
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 }

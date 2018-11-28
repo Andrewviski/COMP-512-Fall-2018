@@ -18,7 +18,6 @@ import java.util.*;
 
 public class ResourceManager implements IResourceManager {
     private static final String storageKey = "StorageKey";
-    private static final String trxStateLogFilename = "trxState.log";
     private static final int TIME_TO_LIVE_MS = 15000;
     protected static String name = "Server";
     ResourceManagerState state = new ResourceManagerState();
@@ -26,7 +25,7 @@ public class ResourceManager implements IResourceManager {
     // 0: masterRecordFilename
     // 1: masterFilename
     // 2: shadowFilename
-    // 3: logFilename
+    // 3: trxStateLogFilename
     private String[] filenames = {"", "", "", ""};
     private Boolean logAccess = true;
 
@@ -37,7 +36,7 @@ public class ResourceManager implements IResourceManager {
         filenames[0] = name + "_masterRecord";
         filenames[1] = name + "_master";
         filenames[2] = name + "_shadow";
-        filenames[3] = name + ".log";
+        filenames[3] = name + "trxState.log";
 
 
         boolean allFilesExist = true;
@@ -47,7 +46,7 @@ public class ResourceManager implements IResourceManager {
 
         // If we have all the required files then we can recover, otherwise we start fresh.
         if (allFilesExist) {
-            System.err.println("Recovering from " + logFilename());
+            System.err.println("Recovering from " + trxStateLogFilename());
             recover();
         } else {
             for (String filename : filenames) {
@@ -125,29 +124,13 @@ public class ResourceManager implements IResourceManager {
         return filenames[2];
     }
 
-    private String logFilename() {
+    private String trxStateLogFilename() {
         return filenames[3];
-    }
-
-    private void Log(String logMessage) {
-        synchronized (logAccess) {
-            try {
-                PrintWriter writer = new PrintWriter(logFilename());
-                writer.println(logMessage);
-                writer.close();
-            } catch (FileNotFoundException fnfe) {
-                System.err.println(logFilename() + " is unexpectedly missing!");
-                fnfe.printStackTrace();
-            } catch (Exception e) {
-                System.err.println("Failed to log [ \"" + logMessage + "\" ] into " + logFilename());
-                e.printStackTrace();
-            }
-        }
     }
 
     private void WriteToDisk(int transactionId) {
         Xlock(transactionId, storageKey);
-        String latest = readMasterRecordFile();
+        String latest = readMasterRecordFileContents();
 
         // Write the object
         try {
@@ -172,7 +155,7 @@ public class ResourceManager implements IResourceManager {
         }
     }
 
-    private String readMasterRecordFile() {
+    private String readMasterRecordFileContents() {
         String latest = "";
         try {
             Scanner sc = new Scanner(new File(masterRecordFilename()));
@@ -648,6 +631,7 @@ public class ResourceManager implements IResourceManager {
      * @throws RemoteException
      */
     public boolean shutdown() throws RemoteException {
+        //delete files
         new Thread(() -> {
             try {
                 Thread.sleep(3000);
@@ -711,9 +695,9 @@ public class ResourceManager implements IResourceManager {
 
     private void recover() {
         try (ObjectInputStream transactionStatesFile =
-                     new ObjectInputStream(new FileInputStream(trxStateLogFilename));
+                     new ObjectInputStream(new FileInputStream(trxStateLogFilename()));
              ObjectInputStream dataStore =
-                     new ObjectInputStream(new FileInputStream(readMasterRecordFile()));
+                     new ObjectInputStream(new FileInputStream(readMasterRecordFileContents()));
         ) {
 
             state = (ResourceManagerState) transactionStatesFile.readObject();
@@ -733,20 +717,18 @@ public class ResourceManager implements IResourceManager {
                     }
                 }
             }
-        } catch (EOFException e) {
-            System.err.println(readMasterRecordFile() + " is empty, nothing to recover");
-        } catch (RemoteException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (ClassNotFoundException e) {
+        } catch(EOFException e){
+            System.err.println(trxStateLogFilename()+" is empty, no existing previous state to restore.");
+        } catch (FileNotFoundException e) {
+            System.err.println("File not found "+e.getMessage());
+        } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         }
     }
 
     private void saveLog() {
         try (ObjectOutputStream oos =
-                     new ObjectOutputStream(new FileOutputStream(trxStateLogFilename))) {
+                     new ObjectOutputStream(new FileOutputStream(trxStateLogFilename()))) {
 
             oos.writeObject(state);
 
