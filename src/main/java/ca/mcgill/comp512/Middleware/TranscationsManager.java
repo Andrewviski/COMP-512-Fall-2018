@@ -6,7 +6,6 @@ import ca.mcgill.comp512.Server.Interface.IResourceManager;
 
 import java.io.*;
 import java.rmi.RemoteException;
-import java.sql.SQLSyntaxErrorException;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -400,104 +399,111 @@ public class TranscationsManager {
         }
     }
 
-    private ArrayList<Future<Boolean>> VotingPhase(int transactionId, List<IResourceManager> requiredServers)  {
-        System.out.println("2PC-"+transactionId+": asking for votes from:");
-        for(IResourceManager rm: requiredServers) {
-            try {
-                System.out.print(rm.getName() + " ");
-            } catch (Exception e) {
-                System.out.println("Couldn't access one of the required resource managers for " + transactionId);
-            }
-        }
+    private ArrayList<Boolean> VotingPhase(int transactionId, List<String> requiredServers) {
+        crashIfModeIs(IResourceManager.TransactionManagerCrashModes.BEFORE_SEND_VOTE_REQ);
 
-        ArrayList<Future<Boolean>> votes = new ArrayList<>();
+        System.out.println("2PC-" + transactionId + ": asking for votes from:");
+        for (String name : requiredServers)
+            System.out.print(name + " ");
+
+        ArrayList<Boolean> votes = new ArrayList<>();
         if (requiredServers.size() > 0) {
             ArrayList<Callable<Boolean>> voteRequests = new ArrayList<>();
-
-            for (IResourceManager rm : requiredServers) {
+            ArrayList<Future<Boolean>> future_votes = new ArrayList<>();
+            for (String name : requiredServers) {
                 voteRequests.add(() -> {
-                            if (rm == null) {
+                            if (ownerMiddleware.dead.get(name).get()) {
                                 System.err.println("A required server is dead, commit cannot proceed!");
                                 return false;
                             }
-                            return rm.prepare(transactionId);
+                            return getResourceManagerForName(name).prepare(transactionId);
                         }
                 );
             }
             final ExecutorService service = Executors.newFixedThreadPool(voteRequests.size());
             for (Callable<Boolean> voteRequest : voteRequests)
-                votes.add(service.submit(voteRequest));
+                future_votes.add(service.submit(voteRequest));
+
             service.shutdown();
+
+            for (Future<Boolean> vote : future_votes) {
+                try {
+                    votes.add(vote.get());
+                    crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_REC_SOME_REPLIES);
+                } catch (Exception e) {
+                    System.err.println("Cannot get vote results from one of the servers");
+                    e.printStackTrace();
+                    return new ArrayList<>();
+                }
+            }
+            crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SEND_VOTE_REQ);
         }
-        crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SEND_VOTE_REQ);
         return votes;
     }
 
-    private boolean DecisionPhase(int transactionId, ArrayList<Future<Boolean>> votes, List<IResourceManager> requiredServers) {
-        boolean success = true;
-        for (Future<Boolean> vote : votes) {
-            try {
-                success &= vote.get();
-                crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_REC_SOME_REPLIES);
-            } catch (Exception e) {
-                System.err.println("Cannot get vote results from one of the servers");
-                e.printStackTrace();
-                return false;
-            }
-        }
-
-        // Not sure whats the difference? :/
+    private boolean DecisionPhase(int transactionId, ArrayList<Boolean> votes, List<String> requiredServers) {
         crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_REC_ALL_REPLIES);
+
+        boolean decision = true;
+        for (Boolean vote : votes)
+            decision &= vote;
+
         crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_DECIDING);
 
-        if (success) {
-            for (IResourceManager rm : requiredServers) {
+        if (decision) {
+            for (String name : requiredServers) {
                 try {
-                    rm.commit(transactionId);
-                    crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_SOME_DECISIONS);
+                    IResourceManager rm = getResourceManagerForName(name);
+                    try {
+                        getResourceManagerForName(name).commit(transactionId);
+                        crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_SOME_DECISIONS);
+                    } catch (Exception e) {
+                        System.err.println("Failed to send a commit decision to " + rm.toString());
+                        return false;
+                    }
                 } catch (Exception e) {
-                    System.out.println("Failed to send a commit decision to " + rm.toString());
-                    return false;
+                    System.err.println(name+" resource manager did not receive the commit decision [ "+e.getMessage()+" ]");
                 }
             }
             return true;
         } else {
-            for (IResourceManager rm : requiredServers) {
+            for (String name : requiredServers) {
                 try {
-                    rm.abort(transactionId);
-                    crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_SOME_DECISIONS);
+                    IResourceManager rm = getResourceManagerForName(name);
+                    try {
+                        rm.abort(transactionId);
+                        crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_SOME_DECISIONS);
+                    } catch (Exception e) {
+                        System.err.println("Failed to send an abort decision to " + rm.toString());
+                        return false;
+                    }
                 } catch (Exception e) {
-                    System.out.println("Failed to send an abort decision to " + rm.toString());
-                    return false;
+                    System.err.println(name+" resource manager did not receive the abort decision [ "+e.getMessage()+" ]");
                 }
             }
         }
+        crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_ALL_DECISIONS);
         return true;
     }
 
     private boolean TwoPC_Protocol(int transactionId) {
-        List<IResourceManager> requiredServers = GetRequiredServers(transactionId);
+        List<String> requiredServers = GetRequiredServers(transactionId);
 
         boolean success = true;
 
         state.transactionStates.put(transactionId, "Start");
 
-        crashIfModeIs(IResourceManager.TransactionManagerCrashModes.BEFORE_SEND_VOTE_REQ);
         if (!DecisionPhase(transactionId, VotingPhase(transactionId, requiredServers), requiredServers)) {
-            System.out.println("2PC-"+transactionId+": failed, retrying in "+TWOPHASECOMMIT_DELAY/1000+" Seconds...");
+            System.out.println("2PC-" + transactionId + ": failed, retrying in " + TWOPHASECOMMIT_DELAY / 1000 + " Seconds...");
             // Sleep then retry again.
             try {
                 Thread.sleep(TWOPHASECOMMIT_DELAY);
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
             }
-
-            crashIfModeIs(IResourceManager.TransactionManagerCrashModes.BEFORE_SEND_VOTE_REQ);
             if (DecisionPhase(transactionId, VotingPhase(transactionId, requiredServers), requiredServers))
                 success = false;
         }
-
-        crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_ALL_DECISIONS);
         return success;
     }
 
@@ -555,25 +561,39 @@ public class TranscationsManager {
         }
     }
 
-    private List<IResourceManager> GetRequiredServers(int transactionId) {
-        List<IResourceManager> requiredServers = new ArrayList<>();
+    private List<String> GetRequiredServers(int transactionId) {
+        List<String> requiredServers = new ArrayList<>();
         int invo_mask = state.involvementMask.get(transactionId);
+
         if ((invo_mask & FLIGHTS_FLAG) != 0) {
-            requiredServers.add(GetFlightsManager());
+            requiredServers.add("Flights");
         }
 
         if ((invo_mask & CARS_FLAG) != 0) {
-            requiredServers.add(GetCarsManager());
+            requiredServers.add("Rooms");
         }
 
         if ((invo_mask & ROOMS_FLAG) != 0) {
-            requiredServers.add(GetRoomsManager());
+            requiredServers.add("Cars");
         }
         return requiredServers;
     }
 
     public String getName() throws RemoteException {
         return "Middleware";
+    }
+
+    public IResourceManager getResourceManagerForName(String name) throws RemoteException {
+        switch (name) {
+            case "Flights":
+                return GetFlightsManager();
+            case "Cars":
+                return GetCarsManager();
+            case "Rooms":
+                return GetRoomsManager();
+            default:
+                return null;
+        }
     }
 
     private void crashIfModeIs(IResourceManager.TransactionManagerCrashModes mode) {

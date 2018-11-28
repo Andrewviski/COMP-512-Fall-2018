@@ -17,40 +17,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 
 public abstract class Client {
-    private static int HEARTBEAT_FREQUENCY = 1000;
     IResourceManager resourceManager = null;
-    protected AtomicBoolean middleware_dead = new AtomicBoolean(true);
     protected static String middlewareName = "Middleware";
     protected static String middlewareHostname = "localhost";
     protected static int middlewarePort = 54006;
-    public abstract void connectServer();
+    protected AtomicBoolean middleware_dead = new AtomicBoolean(true);
+
+    public abstract void connectMiddleware();
 
     public void start() {
-
-        // Create a heartbeat thread
-        new Thread(() -> {
-            while (true) {
-                try {
-                    Thread.sleep(HEARTBEAT_FREQUENCY);
-                    if (!middleware_dead.get()) {
-                        try {
-                            resourceManager.getName();
-                        } catch (Exception e) {
-                            connectServer();
-                            if (middleware_dead.get())
-                                System.out.println(middlewareName + " died, disconnecting!");
-                        }
-                    } else {
-                        connectServer();
-                        if (!middleware_dead.get())
-                            System.out.println(middlewareName + " is alive, reconnected!");
-                    }
-                } catch (Exception e) {
-                    System.out.println("Heartbreat exception at client");
-                }
-            }
-        }).start();
-
         // Prepare for reading commands
         System.out.println();
         System.out.println("Location \"help\" for list of supported commands");
@@ -71,12 +46,16 @@ public abstract class Client {
             }
 
             try {
+                if (middleware_dead.get()) {
+                    System.err.println((char) 27 + "[31;1mMiddleware is dead " + (char) 27 + "[0m");
+                    continue;
+                }
                 arguments = parse(command);
                 Command cmd = Command.fromString((String) arguments.get(0));
                 try {
                     execute(cmd, arguments);
                 } catch (Exception e) {
-                    connectServer();
+                    connectMiddleware();
                     execute(cmd, arguments);
                 }
             } catch (IllegalArgumentException e) {
@@ -490,36 +469,38 @@ public abstract class Client {
                     checkArgumentsCount(1, arguments.size());
 
                     if (resourceManager.resetCrashes()) {
-                        System.out.println("All crash modes have been");
+                        System.out.println("All crash modes have been reset!");
                         return true;
                     } else {
                         System.out.println("Reset Crashes failed");
                         return false;
                     }
                 case CrashMiddleware:
-                    checkArgumentsCount(1, arguments.size());
+                    checkArgumentsCount(2, arguments.size());
 
-                    if (resourceManager.shutdown()) {
-                        System.out.println("System has shutdown");
-                        System.exit(0);
+                    IResourceManager.TransactionManagerCrashModes t_mode = toMiddlewareMode(toInt(arguments.get(1)));
+
+                    if (resourceManager.crashMiddleware(t_mode)) {
+                        System.out.println("Crash mode on middleware have been set to " + t_mode.toString());
                         return true;
                     } else {
-                        System.out.println("System could not shutdown");
+                        System.out.println("Failed to set crash mode");
                         return false;
                     }
-                case CrashReourceManager:
-                    checkArgumentsCount(1, arguments.size());
+                case CrashResourceManager:
+                    checkArgumentsCount(3, arguments.size());
+                    String name = arguments.get(1);
+                    IResourceManager.ResourceManagerCrashModes rm_mode = toResourceManagerMode(toInt(arguments.get(2)));
 
-                    if (resourceManager.shutdown()) {
-                        System.out.println("System has shutdown");
-                        System.exit(0);
+                    if (resourceManager.crashResourceManager(name, rm_mode)) {
+                        System.out.println("Crash mode on "+name+" resourcemanager have been set to " + rm_mode.toString());
                         return true;
                     } else {
-                        System.out.println("System could not shutdown");
+                        System.out.println("Failed to set crash mode");
                         return false;
                     }
             }
-        } catch (RemoteException | TransactionAbortedException | InvalidTransactionException | DeadResourceManagerException e ) {
+        } catch (RemoteException | TransactionAbortedException | InvalidTransactionException | DeadResourceManagerException e) {
             System.out.println(e.getMessage());
         } catch (DeadlockException dle) {
             System.out.println("The transaction " + dle.getXId() + " is deadlocked and aborted.");
@@ -557,5 +538,17 @@ public abstract class Client {
     public static boolean toBoolean(String string)// throws Exception
     {
         return string.equals("1") || string.equals("true");
+    }
+
+    public static IResourceManager.TransactionManagerCrashModes toMiddlewareMode(int mode) {
+        if (mode >= 1 && mode <= 5)
+            return IResourceManager.TransactionManagerCrashModes.values()[mode];
+        return null;
+    }
+
+    public static IResourceManager.ResourceManagerCrashModes toResourceManagerMode(int mode) {
+        if (mode >= 1 && mode <= 8)
+            return IResourceManager.ResourceManagerCrashModes.values()[mode];
+        return null;
     }
 }
