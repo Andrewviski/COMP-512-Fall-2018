@@ -383,6 +383,7 @@ public class TranscationsManager {
         System.out.println("2PC-" + transactionId + ": asking for votes from:");
         for (String name : requiredServers)
             System.out.print(name + " ");
+        System.out.println();
 
         ArrayList<Boolean> votes = new ArrayList<>();
         if (requiredServers.size() > 0) {
@@ -508,7 +509,15 @@ public class TranscationsManager {
         if (!state.pendingXids.contains(transactionId)) {
             throw new InvalidTransactionException(transactionId, "Invalid commit xid.");
         }
+
         List<String> requiredServers = GetRequiredServers(transactionId);
+        String msg="Aborting " + transactionId + " on ";
+
+        for (String name : requiredServers) {
+            msg+=name;
+        }
+
+        System.out.println(msg);
         for (String name : requiredServers) {
             if (ownerMiddleware.dead.get(name).get()) {
                 System.err.println("Failed to abort, one of the required servers is dead.");
@@ -546,11 +555,11 @@ public class TranscationsManager {
             requiredServers.add("Flights");
         }
 
-        if ((invo_mask & CARS_FLAG) != 0) {
+        if ((invo_mask & ROOMS_FLAG) != 0) {
             requiredServers.add("Rooms");
         }
 
-        if ((invo_mask & ROOMS_FLAG) != 0) {
+        if ((invo_mask & CARS_FLAG) != 0) {
             requiredServers.add("Cars");
         }
         return requiredServers;
