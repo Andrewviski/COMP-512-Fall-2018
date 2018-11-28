@@ -4,16 +4,15 @@ import ca.mcgill.comp512.Server.Common.RMHashMap;
 import ca.mcgill.comp512.Server.Common.ResourceManager;
 import ca.mcgill.comp512.Server.Interface.IResourceManager;
 
-import java.rmi.registry.Registry;
-import java.rmi.registry.LocateRegistry;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.HashMap;
 
 
 public class RMIResourceManager extends ResourceManager {
     private static String s_rmiPrefix = "group16_";
-    private static String name = "Server";
     private static int port = 54000;
     private HashMap<Integer, RMHashMap> editSet;
 
@@ -82,6 +81,15 @@ public class RMIResourceManager extends ResourceManager {
 
     public RMIResourceManager(String name) {
         super(name);
+    }
+
+    @Override
+    public String getName() throws RemoteException {
+        return name;
+    }
+
+    public String ToString() throws RemoteException {
+        return name + " Server @ " + port;
     }
 
 }

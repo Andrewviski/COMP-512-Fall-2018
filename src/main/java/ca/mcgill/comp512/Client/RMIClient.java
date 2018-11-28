@@ -4,15 +4,12 @@ import ca.mcgill.comp512.Server.Interface.IResourceManager;
 
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.rmi.RemoteException;
-import java.rmi.NotBoundException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RMIClient extends Client {
-    private static String middlewareHostname = "localhost";
-    private static int middlewarePort = 54006;
-    private static String middlewareName = "Middleware";
-
     private static String s_rmiPrefix = "group16_";
+    private static int HEARTBEAT_FREQUENCY = 2000;
+
 
     private static void ReportClientError(String msg, Exception e) {
         System.err.println((char) 27 + "[31;1mClient exception: " + (char) 27 + "[0m" + msg + "]");
@@ -51,34 +48,69 @@ public class RMIClient extends Client {
         // Get a reference to the RMIRegister
         try {
             RMIClient client = new RMIClient();
-            client.connectServer();
+            client.searchForMiddleware();
+
+            // Create a heartbeat thread
+            new Thread(() -> {
+                while (true) {
+                    try {
+                        Thread.sleep(HEARTBEAT_FREQUENCY);
+                        if (!client.middleware_dead.get()) {
+                            try {
+                                client.resourceManager.getName();
+                            } catch (Exception e) {
+                                client.middleware_dead.set(true);
+                                System.out.println("\n"+middlewareName + " died, disconnecting!");
+                            }
+                        } else {
+                            client.connectMiddleware();
+                            if (!client.middleware_dead.get()) {
+                                System.out.println(middlewareName + " is alive, reconnected!");
+                                System.out.print((char) 27 + "[32;1m\n>] " + (char) 27 + "[0m");
+                            }
+                        }
+                    } catch (Exception e) {
+                        System.out.println("Heartbreat exception at client");
+                    }
+                }
+            }).start();
+
             client.start();
         } catch (Exception e) {
             ReportClientError("Uncaught exception", e);
         }
     }
 
-    public void connectServer() {
+    public void searchForMiddleware() {
         try {
-            boolean firstAttempt = true;
             while (true) {
                 try {
                     Registry registry = LocateRegistry.getRegistry(middlewareHostname, middlewarePort);
-                    resourceManager = (IResourceManager)registry.lookup(s_rmiPrefix + middlewareName);
+                    resourceManager = (IResourceManager) registry.lookup(s_rmiPrefix + middlewareName);
                     System.out.println("Connected to middleware server [" + middlewareHostname + ":" + middlewarePort + "/" + s_rmiPrefix + middlewareName + "]");
-                    break;
+                    middleware_dead.set(false);
+                    return;
+                } catch (Exception e) {
+                    System.out.println("Waiting for middleware server [" + middlewareHostname + ":" + middlewarePort + "/" + s_rmiPrefix + middlewareName + "]");
                 }
-                catch (NotBoundException|RemoteException e) {
-                    if (firstAttempt) {
-                        ReportClientError("Waiting for middleware server [" + middlewareHostname + ":" + middlewarePort + "/" + s_rmiPrefix + middlewareName + "]",e);
-                        firstAttempt = false;
-                    }
-                }
-                Thread.sleep(500);
+                Thread.sleep(1000);
             }
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             ReportClientError("Cannot connect to middlware at(" + middlewareHostname + ":" + middlewarePort + ")", e);
         }
+        middleware_dead.set(true);
+    }
+
+    public void connectMiddleware() {
+        try {
+            Registry registry = LocateRegistry.getRegistry(middlewareHostname, middlewarePort);
+            resourceManager = (IResourceManager) registry.lookup(s_rmiPrefix + middlewareName);
+            System.out.println("Connected to middleware server [" + middlewareHostname + ":" + middlewarePort + "/" + s_rmiPrefix + middlewareName + "]");
+            middleware_dead.set(false);
+            return;
+        } catch (Exception e) {
+            System.out.println("Checking if middleware [" + middlewareHostname + ":" + middlewarePort + "/" + s_rmiPrefix + middlewareName + "] has recovered");
+        }
+        middleware_dead.set(true);
     }
 }

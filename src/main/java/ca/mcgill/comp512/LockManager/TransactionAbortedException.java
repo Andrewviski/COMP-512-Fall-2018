@@ -1,6 +1,6 @@
 package ca.mcgill.comp512.LockManager;
 
-public class TransactionAbortedException extends Exception
+public class TransactionAbortedException extends RuntimeException
 {
     private int m_xid = 0;
 

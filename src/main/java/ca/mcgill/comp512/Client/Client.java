@@ -2,18 +2,28 @@ package ca.mcgill.comp512.Client;
 
 import ca.mcgill.comp512.LockManager.DeadlockException;
 import ca.mcgill.comp512.LockManager.TransactionAbortedException;
+import ca.mcgill.comp512.Middleware.DeadResourceManagerException;
 import ca.mcgill.comp512.Middleware.InvalidTransactionException;
 import ca.mcgill.comp512.Server.Interface.IResourceManager;
 
-import java.util.*;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.rmi.RemoteException;
+import java.util.List;
+import java.util.StringTokenizer;
+import java.util.Vector;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
 public abstract class Client {
     IResourceManager resourceManager = null;
+    protected static String middlewareName = "Middleware";
+    protected static String middlewareHostname = "localhost";
+    protected static int middlewarePort = 54006;
+    protected AtomicBoolean middleware_dead = new AtomicBoolean(true);
 
-    public abstract void connectServer();
+    public abstract void connectMiddleware();
 
     public void start() {
         // Prepare for reading commands
@@ -36,12 +46,16 @@ public abstract class Client {
             }
 
             try {
+                if (middleware_dead.get()) {
+                    System.err.println((char) 27 + "[31;1mMiddleware is dead " + (char) 27 + "[0m");
+                    continue;
+                }
                 arguments = parse(command);
                 Command cmd = Command.fromString((String) arguments.get(0));
                 try {
                     execute(cmd, arguments);
                 } catch (Exception e) {
-                    connectServer();
+                    connectMiddleware();
                     execute(cmd, arguments);
                 }
             } catch (IllegalArgumentException e) {
@@ -425,7 +439,7 @@ public abstract class Client {
                     return xid;
                 case Commit:
                     checkArgumentsCount(2, arguments.size());
-                    int commit_id=toInt(arguments.get(1));
+                    int commit_id = toInt(arguments.get(1));
                     if (resourceManager.commit(commit_id)) {
                         System.out.println("Transcation commited");
                         return true;
@@ -435,7 +449,7 @@ public abstract class Client {
                     }
                 case Abort:
                     checkArgumentsCount(2, arguments.size());
-                    int abort_id=toInt(arguments.get(1));
+                    int abort_id = toInt(arguments.get(1));
                     resourceManager.abort(abort_id);
                     System.out.println("Transcation aborted");
                     return true;
@@ -451,25 +465,58 @@ public abstract class Client {
                         System.out.println("System could not shutdown");
                         return false;
                     }
+                case ResetCrashes:
+                    checkArgumentsCount(1, arguments.size());
+
+                    if (resourceManager.resetCrashes()) {
+                        System.out.println("All crash modes have been reset!");
+                        return true;
+                    } else {
+                        System.out.println("Reset Crashes failed");
+                        return false;
+                    }
+                case CrashMiddleware:
+                    checkArgumentsCount(2, arguments.size());
+
+                    IResourceManager.TransactionManagerCrashModes t_mode = toMiddlewareMode(toInt(arguments.get(1)));
+
+                    if (resourceManager.crashMiddleware(t_mode)) {
+                        System.out.println("Crash mode on middleware have been set to " + t_mode.toString());
+                        return true;
+                    } else {
+                        System.out.println("Failed to set crash mode");
+                        return false;
+                    }
+                case CrashResourceManager:
+                    checkArgumentsCount(3, arguments.size());
+                    String name = arguments.get(1);
+                    IResourceManager.ResourceManagerCrashModes rm_mode = toResourceManagerMode(toInt(arguments.get(2)));
+
+                    if (resourceManager.crashResourceManager(name, rm_mode)) {
+                        System.out.println("Crash mode on " + name + " resourcemanager have been set to " + rm_mode.toString());
+                        return true;
+                    } else {
+                        System.out.println("Failed to set crash mode");
+                        return false;
+                    }
             }
-        } catch (InvalidTransactionException e) {
+
+        } catch (DeadResourceManagerException e) {
+            System.err.println("Cannot reach remote server!");
             System.out.println(e.getMessage());
-            System.out.println("Please try with a different xid...");
-        } catch (TransactionAbortedException e) {
+        } catch (RemoteException | TransactionAbortedException | InvalidTransactionException e) {
             System.out.println(e.getMessage());
-        } catch (RemoteException e) {
-            System.out.println(e.getMessage());
-        } catch (DeadlockException dle){
-            System.out.println("The transaction "+dle.getXId()+" is deadlocked and aborted.");
+        } catch (DeadlockException dle) {
+            System.err.println("The transaction " + dle.getXId() + " is deadlocked and aborted.");
             try {
                 resourceManager.abort(dle.getXId());
-            }catch (Exception e){
-                System.out.println("Cannot abort deadlocked transaction "+ dle.getXId());
+            } catch (Exception e) {
+                System.out.println("Cannot abort deadlocked transaction " + dle.getXId());
             }
         }
         return null;
     }
-    
+
     public static Vector<String> parse(String command) {
         Vector<String> arguments = new Vector<String>();
         StringTokenizer tokenizer = new StringTokenizer(command, ",");
@@ -494,6 +541,18 @@ public abstract class Client {
 
     public static boolean toBoolean(String string)// throws Exception
     {
-        return (new Boolean(string)).booleanValue();
+        return string.equals("1") || string.equals("true");
+    }
+
+    public static IResourceManager.TransactionManagerCrashModes toMiddlewareMode(int mode) {
+        if (mode >= 1 && mode <= 5)
+            return IResourceManager.TransactionManagerCrashModes.values()[mode];
+        return null;
+    }
+
+    public static IResourceManager.ResourceManagerCrashModes toResourceManagerMode(int mode) {
+        if (mode >= 1 && mode <= 8)
+            return IResourceManager.ResourceManagerCrashModes.values()[mode];
+        return null;
     }
 }

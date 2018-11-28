@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
+cd ..
+mvn package
+cd scripts/
+
+function ctrl_c() {
+        echo "Deleting files"
+        ./clean_files.sh
+        kill_all.sh
+        exit 0
+}
+
+# trap ctrl-c and call ctrl_c()
+trap 'ctrl_c' SIGINT
 
 # Flights, Rooms, Cars, MiddleWare
 MACHINES=(open-12.cs.mcgill.ca
@@ -23,19 +36,36 @@ if [ $1 = "local" ]; then
     sleep 1
     ./run_middleware.sh localhost localhost localhost ${PORTS[0]} ${PORTS[1]} ${PORTS[2]} &
     echo 'Done!'
-    exit 1
 fi
 
-tmux new-session \; \
-	split-window -h \; \
-	split-window -v \; \
-	split-window -v \; \
-	select-layout main-vertical \; \
-	select-pane -t 1 \; \
-	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[0]} \"cd ${PROJ_PATH} > /dev/null; mvn package; echo -n 'Connected to '; hostname; cd scripts > /dev/null; ./run_server.sh ${PORTS[0]} Flights\"" C-m \; \
-	select-pane -t 2 \; \
-	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[1]} \"cd ${PROJ_PATH} > /dev/null; mvn package; echo -n 'Connected to '; hostname; cd scripts > /dev/null; ./run_server.sh ${PORTS[1]} Rooms\"" C-m \; \
-	select-pane -t 3 \; \
-	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[2]} \"cd ${PROJ_PATH} > /dev/null; mvn package; echo -n 'Connected to '; hostname; cd scripts > /dev/null; ./run_server.sh ${PORTS[2]} Cars\"" C-m \; \
-	select-pane -t 0 \; \
-	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[3]} \"cd ${PROJ_PATH} > /dev/null; mvn package; echo -n 'Connected to '; hostname; cd scripts > /dev/null; sleep 1.5s; ./run_middleware.sh ${MACHINES[0]} ${MACHINES[1]} ${MACHINES[2]} ${PORTS[0]} ${PORTS[1]} ${PORTS[2]} \"" C-m \;
+if [ $1 = "local-split" ]; then
+    tmux new-session \; \
+        split-window -h \; \
+        split-window -v \; \
+        split-window -v \; \
+        select-layout main-vertical \; \
+        select-pane -t 1 \; \
+        send-keys "./run_server.sh ${PORTS[0]} Flights" C-m \; \
+        select-pane -t 2 \; \
+        send-keys "./run_server.sh ${PORTS[1]} Rooms" C-m \; \
+        select-pane -t 3 \; \
+        send-keys "./run_server.sh ${PORTS[2]} Cars" C-m \; \
+        select-pane -t 0 \; \
+        send-keys "sleep 1 && ./run_middleware.sh localhost localhost localhost ${PORTS[0]} ${PORTS[1]} ${PORTS[2]} " C-m \;
+fi
+
+if [ $1 = "remote" ]; then
+    tmux new-session \; \
+    	split-window -h \; \
+    	split-window -v \; \
+    	split-window -v \; \
+    	select-layout main-vertical \; \
+    	select-pane -t 1 \; \
+    	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[0]} \"cd ${PROJ_PATH} > /dev/null; mvn package; echo -n 'Connected to '; hostname; cd scripts > /dev/null; ./run_server.sh ${PORTS[0]} Flights\"" C-m \; \
+    	select-pane -t 2 \; \
+    	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[1]} \"cd ${PROJ_PATH} > /dev/null; mvn package; echo -n 'Connected to '; hostname; cd scripts > /dev/null; ./run_server.sh ${PORTS[1]} Rooms\"" C-m \; \
+    	select-pane -t 3 \; \
+    	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[2]} \"cd ${PROJ_PATH} > /dev/null; mvn package; echo -n 'Connected to '; hostname; cd scripts > /dev/null; ./run_server.sh ${PORTS[2]} Cars\"" C-m \; \
+    	select-pane -t 0 \; \
+    	send-keys "sshpass -p ${PASS} ssh -o StrictHostKeyChecking=no ${USER}@${MACHINES[3]} \"cd ${PROJ_PATH} > /dev/null; mvn package; echo -n 'Connected to '; hostname; cd scripts > /dev/null; sleep 1.5s; ./run_middleware.sh ${MACHINES[0]} ${MACHINES[1]} ${MACHINES[2]} ${PORTS[0]} ${PORTS[1]} ${PORTS[2]} \"" C-m \;
+fi

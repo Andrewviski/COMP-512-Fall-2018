@@ -1,7 +1,7 @@
 package ca.mcgill.comp512.LockManager;
 /* The transaction requested a lock that it already had. */ 
 
-public class RedundantLockRequestException extends Exception
+public class RedundantLockRequestException extends RuntimeException
 {
 	protected int m_xid = 0;
 
