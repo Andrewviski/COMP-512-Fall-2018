@@ -424,7 +424,7 @@ public class TranscationsManager {
 
         crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_REC_ALL_REPLIES);
 
-        boolean decision = votes.size() == requiredServers.size();
+        boolean decision = (votes.size() == requiredServers.size()) && state.pendingXids.contains(transactionId);
         for (Boolean vote : votes)
             decision &= vote;
         System.out.println("Sending a " + ((decision) ? "Yes" : "No") + " decision to participants...");
@@ -432,6 +432,7 @@ public class TranscationsManager {
         crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_DECIDING);
 
         if (decision) {
+            state.transactionStates.put(transactionId, "Commit");
             for (String name : requiredServers) {
                 try {
                     IResourceManager rm = getResourceManagerForName(name);
@@ -447,6 +448,7 @@ public class TranscationsManager {
                 }
             }
         } else {
+            state.transactionStates.put(transactionId, "Abort");
             for (String name : requiredServers) {
                 try {
                     IResourceManager rm = getResourceManagerForName(name);
@@ -481,8 +483,8 @@ public class TranscationsManager {
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
             }
-            if(!state.pendingXids.contains(transactionId)){
-                System.err.println(transactionId+" already aborted due to timeout, cannot retry 2PC");
+            if (!state.pendingXids.contains(transactionId)) {
+                System.err.println(transactionId + " already aborted due to timeout, cannot retry 2PC");
                 return d;
             }
             d = DecisionPhase(transactionId, VotingPhase(transactionId, requiredServers), requiredServers);
@@ -497,17 +499,14 @@ public class TranscationsManager {
 
         TWOPHASECOMMIT_DECISION protocolSuccess = TwoPC_Protocol(transactionId);
 
-        if (protocolSuccess==TWOPHASECOMMIT_DECISION.COMMIT) {
-            state.pendingXids.remove(transactionId);
-            stopTimer(transactionId);
-            state.transactionStates.put(transactionId, "Commit");
-            saveState();
+        if (protocolSuccess == TWOPHASECOMMIT_DECISION.COMMIT || protocolSuccess == TWOPHASECOMMIT_DECISION.ABORT) {
+            clearLocalVars(transactionId);
             return true;
-        } else {
+        } else if (protocolSuccess == TWOPHASECOMMIT_DECISION.PROTOCOL_FAILED) {
             System.out.println("Aborting " + transactionId + " as protocol was not successful");
             abort(transactionId);
-            return false;
         }
+        return false;
     }
 
     public void abort(int transactionId) throws RemoteException, InvalidTransactionException {
@@ -523,18 +522,22 @@ public class TranscationsManager {
         }
 
         System.out.println(msg);
+        state.transactionStates.put(transactionId, "Abort");
         for (String name : requiredServers) {
             if (ownerMiddleware.dead.get(name).get()) {
-                System.err.println("Failed to request abort on "+name+" since it's dead!");
-            }else{
+                System.err.println("Failed to request abort on " + name + " since it's dead!");
+            } else {
                 getResourceManagerForName(name).abort(transactionId);
             }
         }
+        clearLocalVars(transactionId);
+    }
 
+    public void clearLocalVars(int transactionId) {
         stopTimer(transactionId);
         state.pendingXids.remove(transactionId);
         state.involvementMask.remove(transactionId);
-        state.transactionStates.put(transactionId, "Abort");
+
         saveState();
     }
 
