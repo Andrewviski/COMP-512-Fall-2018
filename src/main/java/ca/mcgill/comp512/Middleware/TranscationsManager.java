@@ -442,7 +442,6 @@ public class TranscationsManager {
                     try {
                         getResourceManagerForName(name).commit(transactionId);
                         crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_SOME_DECISIONS);
-                        return TWOPHASECOMMIT_DECISION.COMMIT;
                     } catch (Exception e) {
                         System.err.println("Failed to send a commit decision to " + rm.toString());
                     }
@@ -462,7 +461,6 @@ public class TranscationsManager {
                         System.out.println("Aborting " + transactionId + " of a NO vote");
                         rm.abort(transactionId);
                         crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_SOME_DECISIONS);
-                        return TWOPHASECOMMIT_DECISION.ABORT;
                     } catch (Exception e) {
                         System.err.println("Failed to send an abort decision to " + rm.toString());
                     }
@@ -651,6 +649,7 @@ public class TranscationsManager {
                             }
                         }
                         clearLocalVars(xid);
+                        System.out.println("Commited "+xid);
                     }
                     // Resend abort request
                     else if (state.transactionStates.get(xid).equals("Abort")) {
