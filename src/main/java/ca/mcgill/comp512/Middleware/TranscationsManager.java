@@ -597,6 +597,7 @@ public class TranscationsManager {
 
     public boolean SetCrashMode(IResourceManager.TransactionManagerCrashModes mode) {
         this.state.mode = mode;
+        saveState();
         return true;
     }
 

@@ -720,6 +720,7 @@ public class ResourceManager implements IResourceManager {
     @Override
     public boolean resetCrashes() throws RemoteException {
         state.mode = ResourceManagerCrashModes.NONE;
+        saveState();
         return true;
     }
 
@@ -732,6 +733,7 @@ public class ResourceManager implements IResourceManager {
     @Override
     public boolean crashResourceManager(String name, ResourceManagerCrashModes mode) throws RemoteException {
         this.state.mode = mode;
+        saveState();
         return true;
     }
 
