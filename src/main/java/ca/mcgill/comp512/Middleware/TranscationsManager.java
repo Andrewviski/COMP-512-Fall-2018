@@ -631,7 +631,7 @@ public class TranscationsManager {
                 } else {
                     // Finds a Start-2PC record, abort (or resend vote request but we don't)
                     if (state.transactionStates.get(xid).equals("Start")) {
-                        System.out.println("Found start-2PC for " + xid + ", restarting the protocol");
+                        System.out.println("Found start-2PC for " + xid + ", aborting");
                         abort(xid);
                     }
                     // Resend commit request
