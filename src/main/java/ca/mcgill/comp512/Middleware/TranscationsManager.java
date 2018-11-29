@@ -632,7 +632,7 @@ public class TranscationsManager {
                     // Finds a Start-2PC record, abort (or resend vote request but we don't)
                     if (state.transactionStates.get(xid).equals("Start")) {
                         System.out.println("Found start-2PC for " + xid + ", restarting the protocol");
-                        commit(xid);
+                        abort(xid);
                     }
                     // Resend commit request
                     else if (state.transactionStates.get(xid).equals("Commit")) {
@@ -660,6 +660,8 @@ public class TranscationsManager {
                 }
             }
 
+        } catch (EOFException e) {
+            System.err.println(stateFilename() + " is empty, no existing previous state to restore.");
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
