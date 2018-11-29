@@ -329,6 +329,10 @@ public class Tester {
         return commands;
     }
 
+    static List<TestCommand<?>> MileStone3Test(RMIClient client1) {
+
+    }
+
     boolean RunGenericTest(RMIClient tester_client, List<TestCommand<?>> test) {
         for (int i = 0; i < test.size(); i++) {
             //TestCommand test_command=test.get(rand.nextInt(test.size()-1));

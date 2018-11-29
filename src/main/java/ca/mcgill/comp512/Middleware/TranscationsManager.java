@@ -19,9 +19,10 @@ public class TranscationsManager {
         HashMap<Integer, Integer> involvementMask = new HashMap<>();
         HashMap<Integer, Long> xidTimer = new HashMap<>();
         HashMap<Integer, String> transactionStates = new HashMap<>();
+        Integer idGen = 1;
     }
 
-    private Integer idGen = 1;
+
     private int TWOPHASECOMMIT_DELAY = 15000;
     public static final int FLIGHTS_FLAG = 1;  // 0001
     public static final int ROOMS_FLAG = 2;  // 0010
@@ -31,28 +32,18 @@ public class TranscationsManager {
     private RMIMiddleware ownerMiddleware;
     private TranscationsManagerState state;
     private IResourceManager.TransactionManagerCrashModes mode = IResourceManager.TransactionManagerCrashModes.NONE;
-    private final String stateFilename = "transactionManagerState.bin";
+
 
     private Boolean logAccess = true;
+
+    private String stateFilename() {
+        return ownerMiddleware.stateFilename;
+    }
 
     TranscationsManager(RMIMiddleware ownerMiddleware) {
         this.ownerMiddleware = ownerMiddleware;
         this.state = new TranscationsManagerState();
-        // If a log exist then we are recovering, otherwise it's a fresh bootup.
-        File log = new File(stateFilename);
-        if (log.exists()) {
-            System.err.println("Recovering from " + stateFilename);
-            recoverState();
-        } else {
-            try {
-                System.err.println("Creating " + stateFilename);
-                log.createNewFile();
-            } catch (Exception e) {
-                System.err.println("Failed to create " + stateFilename + " terminating...");
-                e.printStackTrace();
-                System.exit(-1);
-            }
-        }
+
 
         // Create a tx timeout thread
         new Thread(() -> {
@@ -363,8 +354,8 @@ public class TranscationsManager {
     }
 
     public int start() throws RemoteException {
-        synchronized (idGen) {
-            int new_xid = idGen++;
+        synchronized (state.idGen) {
+            int new_xid = state.idGen++;
 
             state.pendingXids.add(new_xid);
             state.involvementMask.put(new_xid, 0);
@@ -537,12 +528,12 @@ public class TranscationsManager {
     }
 
     public boolean shutdown() throws RemoteException {
-        File log = new File(stateFilename);
+        File log = new File(stateFilename());
         if (log.exists()) {
             log.delete();
             return true;
         } else {
-            System.err.println(stateFilename + " is missing on shutdown!");
+            System.err.println(stateFilename() + " is missing on shutdown!");
             return false;
         }
     }
@@ -594,9 +585,9 @@ public class TranscationsManager {
         return true;
     }
 
-    private void recoverState() {
+    public void recoverState() {
         try (ObjectInputStream ios =
-                     new ObjectInputStream(new FileInputStream(stateFilename))) {
+                     new ObjectInputStream(new FileInputStream(stateFilename()))) {
 
             state = (TranscationsManagerState) ios.readObject();
 
@@ -633,7 +624,7 @@ public class TranscationsManager {
     private void saveState() {
         synchronized (logAccess) {
             try (ObjectOutputStream oos =
-                         new ObjectOutputStream(new FileOutputStream(stateFilename))) {
+                         new ObjectOutputStream(new FileOutputStream(stateFilename()))) {
 
                 oos.writeObject(state);
 

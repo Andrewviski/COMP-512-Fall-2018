@@ -57,7 +57,6 @@ public class ResourceManager implements IResourceManager {
                 try {
                     System.err.println("Creating " + filename);
                     file.createNewFile();
-                    file.deleteOnExit();
                 } catch (Exception e) {
                     System.err.println("Failed to create " + filename + " terminating...");
                     e.printStackTrace();
@@ -665,6 +664,15 @@ public class ResourceManager implements IResourceManager {
      */
     public boolean shutdown() throws RemoteException {
         //delete files
+        for(String filename:filenames){
+            File log = new File(filename);
+            if (log.exists()) {
+                log.delete();
+            } else {
+                System.err.println(filename + " is missing on shutdown!");
+            }
+        }
+
         new Thread(() -> {
             try {
                 Thread.sleep(3000);

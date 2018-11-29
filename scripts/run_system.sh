@@ -14,10 +14,10 @@ function ctrl_c() {
 trap 'ctrl_c' SIGINT
 
 # Flights, Rooms, Cars, MiddleWare
-MACHINES=(open-12.cs.mcgill.ca
-          open-13.cs.mcgill.ca
-          open-14.cs.mcgill.ca
-          open-16.cs.mcgill.ca)
+MACHINES=(cs-12.cs.mcgill.ca
+          cs-13.cs.mcgill.ca
+          cs-14.cs.mcgill.ca
+          cs-16.cs.mcgill.ca)
 
 # Kill all processes listeing to the needed ports
 PORTS=(54002 54003 54004 54006)

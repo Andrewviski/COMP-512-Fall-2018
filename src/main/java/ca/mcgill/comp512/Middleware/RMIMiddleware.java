@@ -4,6 +4,7 @@ import ca.mcgill.comp512.LockManager.DeadlockException;
 import ca.mcgill.comp512.LockManager.TransactionAbortedException;
 import ca.mcgill.comp512.Server.Interface.IResourceManager;
 
+import java.io.File;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -23,6 +24,7 @@ public class RMIMiddleware implements IResourceManager {
     public static final int middlewarePort = 54006;
 
 
+
     // These arrays will store server names, server hostnames, and resource managers for each resources in
     // the following order: Flights, Rooms, Cars, Customers.
     private static String[] server_names = {"Flights", "Rooms", "Cars"};
@@ -31,6 +33,7 @@ public class RMIMiddleware implements IResourceManager {
     public HashMap<String, AtomicBoolean> dead = new HashMap<>();
     private static IResourceManager[] resourceManagers = new IResourceManager[SERVER_COUNT];
     private TranscationsManager txManager;
+    public final String stateFilename = "transactionManagerState.bin";
 
     RMIMiddleware() {
         dead.put("Flights", new AtomicBoolean(true));
@@ -88,7 +91,7 @@ public class RMIMiddleware implements IResourceManager {
             middleware.parseServersConfig(args);
             middleware.setup();
             middleware.searchForServers();
-
+            middleware.startupRecovery();
             // Create a heartbeat thread
             new Thread(() -> {
                 while (true) {
@@ -195,6 +198,24 @@ public class RMIMiddleware implements IResourceManager {
             }
         }
         System.out.println("Middleware up on port " + middlewarePort + " and connected to servers on ports: " + Arrays.toString(server_ports));
+    }
+
+    private void startupRecovery() {
+        // If a log exist then we are recovering, otherwise it's a fresh bootup.
+        File log = new File(stateFilename);
+        if (log.exists()) {
+            System.err.println("Recovering from " + stateFilename);
+            txManager.recoverState();
+        } else {
+            try {
+                System.err.println("Creating " + stateFilename);
+                log.createNewFile();
+            } catch (Exception e) {
+                System.err.println("Failed to create " + stateFilename + " terminating...");
+                e.printStackTrace();
+                System.exit(-1);
+            }
+        }
     }
 
     public boolean searchForServer(int resource_manager_index) {
@@ -342,15 +363,19 @@ public class RMIMiddleware implements IResourceManager {
 
     @Override
     public boolean shutdown() throws RemoteException {
-        if (GetFlightsManager().shutdown() && GetCarsManager().shutdown() && GetRoomsManager().shutdown()) {
-            new Thread(() -> {
-                try {
-                    Thread.sleep(3000);
-                    System.exit(0);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }).start();
+        try {
+            if (GetFlightsManager().shutdown() && GetCarsManager().shutdown() && GetRoomsManager().shutdown()) {
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(3000);
+                        System.exit(0);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }).start();
+            }
+        }catch (DeadResourceManagerException e){
+            System.err.println(e.getRMName() + " is already down.");
         }
         return txManager.shutdown();
     }
