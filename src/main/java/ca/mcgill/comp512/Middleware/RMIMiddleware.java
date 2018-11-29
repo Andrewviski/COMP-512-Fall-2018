@@ -45,7 +45,6 @@ public class RMIMiddleware implements IResourceManager {
     // Resource managers accessors.
     public IResourceManager GetFlightsManager() {
         if (dead.get("Flights").get()) {
-            System.err.println("Trying to access a dead Flights server");
             throw new DeadResourceManagerException("Flights", "");
         }
         return resourceManagers[0];
@@ -53,7 +52,6 @@ public class RMIMiddleware implements IResourceManager {
 
     public IResourceManager GetRoomsManager() {
         if (dead.get("Rooms").get()) {
-            System.err.println("Trying to access a dead Cars server");
             throw new DeadResourceManagerException("Rooms", "");
         }
         return resourceManagers[1];
@@ -61,7 +59,6 @@ public class RMIMiddleware implements IResourceManager {
 
     public IResourceManager GetCarsManager() {
         if (dead.get("Cars").get()) {
-            System.err.println("Trying to access a dead Rooms server");
             throw new DeadResourceManagerException("Cars", "");
         }
         return resourceManagers[2];

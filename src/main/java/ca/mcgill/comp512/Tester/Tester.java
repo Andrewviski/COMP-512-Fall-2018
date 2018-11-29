@@ -2,10 +2,8 @@ package ca.mcgill.comp512.Tester;
 
 import ca.mcgill.comp512.Client.RMIClient;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import static ca.mcgill.comp512.Client.Command.fromString;
@@ -330,13 +328,19 @@ public class Tester {
     }
 
     static List<TestCommand<?>> MileStone3Test(RMIClient client1) {
+        List<TestCommand<?>> commands = new ArrayList<TestCommand<?>>();
 
+        commands.add(new TestCommand<Integer>("launch-middleware", 0));
+        commands.add(new TestCommand<Integer>("start", 0));
+
+        return commands;
     }
 
     boolean RunGenericTest(RMIClient tester_client, List<TestCommand<?>> test) {
         for (int i = 0; i < test.size(); i++) {
-            //TestCommand test_command=test.get(rand.nextInt(test.size()-1));
             TestCommand test_command = test.get(i);
+
+            // sleep command
             if (test_command.command.split(",")[0].equals("Sleep")) {
                 try {
                     TimeUnit.SECONDS.sleep(Integer.parseInt(test_command.command.split(",")[1]));
@@ -346,6 +350,46 @@ public class Tester {
                     return false;
                 }
             }
+
+            // server/middlware launching commands
+            if (test_command.command.split(",")[0].equals("launch-middleware")) {
+                try {
+//                    ProcessBuilder builder = new ProcessBuilder("xterm");
+//                    builder.directory(new File("."));
+//                    Process process = builder.start();
+//
+//                    PrintWriter printWriter = new PrintWriter(new BufferedWriter(new OutputStreamWriter(process.getOutputStream())),true);
+//                    printWriter.println("ls\n");
+//                    printWriter.close();
+
+                    String[] command= {"xterm"};
+                    Runtime rt = Runtime.getRuntime();
+                    Process pr = rt.exec(command);
+
+                    Thread.sleep(2000);
+
+                    BufferedReader in = new BufferedReader(new InputStreamReader(pr.getInputStream()));
+
+                    BufferedReader error = new BufferedReader(new InputStreamReader(pr.getErrorStream()));
+
+                    PrintWriter printWriter = new PrintWriter(new BufferedWriter(new OutputStreamWriter(pr.getOutputStream())),true);
+                    printWriter.println("cd /home/***/sipp/sipp-3.3\n");
+                    Thread.sleep(2000);
+
+                    printWriter.close();
+                    error.close();
+                    in.close();
+                    pr.destroy();
+
+                    continue;
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    System.out.println(test_command.command + "...... Failed!");
+                    return false;
+                }
+            }
+
+            // normal commands
             if (!test_command.Verify(tester_client)) {
                 System.out.println(test_command.command + "...... Failed!");
                 return false;
@@ -359,12 +403,17 @@ public class Tester {
     void StressTest(String[] args, int NClients) {
         for (int i = 0; i < NClients; i++) {
             new Thread(() -> {
+
+
+//				RMIClient tester_client=Spawn(args);
+//				RunGenericTest(tester_client,MileStone1Test(tester_client));
+
                 RMIClient tester_client1 = Spawn(args);
                 RMIClient tester_client2 = Spawn(args);
                 RunGenericTest(tester_client1, MileStone2Test(tester_client1, tester_client2));
 
-//				RMIClient tester_client=Spawn(args);
-//				RunGenericTest(tester_client,MileStone1Test(tester_client));
+//                RMIClient tester_client=Spawn(args);
+//				RunGenericTest(tester_client,MileStone3Test(tester_client));
             }).start();
         }
     }

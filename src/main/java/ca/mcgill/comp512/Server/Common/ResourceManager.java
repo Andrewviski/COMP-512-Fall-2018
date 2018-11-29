@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class ResourceManager implements IResourceManager {
     private static final String storageKey = "StorageKey";
-    private static final int TIME_TO_LIVE_MS = 15000;
+    private static final int TIME_TO_LIVE_MS = 25000;
     protected static String name = "Server";
     ResourceManagerState state = new ResourceManagerState();
     private ResourceManagerCrashModes mode = ResourceManagerCrashModes.NONE;
@@ -47,7 +47,6 @@ public class ResourceManager implements IResourceManager {
 
         // If we have all the required files then we can recover, otherwise we start fresh.
         if (allFilesExist) {
-            System.err.println("Recovering from " + trxStateLogFilename());
             recover();
         } else {
             for (String filename : filenames) {
@@ -83,17 +82,18 @@ public class ResourceManager implements IResourceManager {
         new Thread(() -> {
             while (true) {
                 try {
-
-                        for (Integer xid : state.pendingXids) {
-                            if (System.currentTimeMillis() - state.xidTimer.get(xid) > TIME_TO_LIVE_MS) {
-                                abort(xid);
-                                state.transactionStates.put(xid, "Abort");
-                                saveState();
-                            }
+                    for (Integer xid : state.pendingXids) {
+                        if(!state.xidTimer.containsKey(xid)) {
+                            continue;
                         }
-
-
-                    Thread.sleep(1000);
+                        if (System.currentTimeMillis() - state.xidTimer.get(xid) > TIME_TO_LIVE_MS) {
+                            System.err.println("Timeout for "+xid+" !");
+                            abort(xid);
+                            state.transactionStates.put(xid, "Abort");
+                            saveState();
+                        }
+                    }
+                    Thread.sleep(5000);
                 } catch (InvalidTransactionException e) {
                     System.err.println("Failed to abort transaction-" + e.getXId() + " in the timeout thread");
                     e.printStackTrace();
@@ -179,7 +179,7 @@ public class ResourceManager implements IResourceManager {
 
     private boolean Xlock(int id, String name) throws DeadlockException {
         synchronized (state.lockManager) {
-            boolean r =  state.lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_WRITE);
+            boolean r = state.lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_WRITE);
             saveState();
             return r;
         }
@@ -206,7 +206,7 @@ public class ResourceManager implements IResourceManager {
 
         // Get the updated version
         synchronized (state.writeSets) {
-            if (!state.writeSets.containsKey(xid)){
+            if (!state.writeSets.containsKey(xid)) {
                 state.writeSets.put(xid, new HashMap<>());
                 saveState();
             }
@@ -238,7 +238,7 @@ public class ResourceManager implements IResourceManager {
         if (!Xlock(xid, key))
             return;
         synchronized (state.writeSets) {
-            if (!state.writeSets.containsKey(xid)){
+            if (!state.writeSets.containsKey(xid)) {
                 state.writeSets.put(xid, new HashMap<>());
             }
 
@@ -246,7 +246,7 @@ public class ResourceManager implements IResourceManager {
             writeSet.put(key, value);
 
             //update latest operation to be a write.
-            if (!state.latestOp.containsKey(xid)){
+            if (!state.latestOp.containsKey(xid)) {
                 state.latestOp.put(xid, new HashMap<>());
 
             }
@@ -284,7 +284,7 @@ public class ResourceManager implements IResourceManager {
 
     private void addPendingTransaction(int xid) {
 
-            state.pendingXids.add(xid);
+        state.pendingXids.add(xid);
 
 
         if (state.xidTimer.containsKey(xid)) {
@@ -625,7 +625,7 @@ public class ResourceManager implements IResourceManager {
             saveShadow(transactionId);
 
 
-                state.pendingXids.remove(transactionId);
+            state.pendingXids.remove(transactionId);
 
             stopTimer(transactionId);
             state.lockManager.UnlockAll(transactionId);
@@ -648,6 +648,8 @@ public class ResourceManager implements IResourceManager {
             InvalidTransactionException {
         // TODO: akaba, this will create a bug where a non 2PC thing is going to call abort.
         crashIfModeIs(ResourceManagerCrashModes.AFTER_REC_DECISION);
+        if(!state.pendingXids.contains(transactionId))
+            return;
         System.out.println("Aborting " + transactionId);
         stopTimer(transactionId);
         state.pendingXids.remove(transactionId);
@@ -664,7 +666,7 @@ public class ResourceManager implements IResourceManager {
      */
     public boolean shutdown() throws RemoteException {
         //delete files
-        for(String filename:filenames){
+        for (String filename : filenames) {
             File log = new File(filename);
             if (log.exists()) {
                 log.delete();
@@ -675,7 +677,7 @@ public class ResourceManager implements IResourceManager {
 
         new Thread(() -> {
             try {
-                Thread.sleep(3000);
+                Thread.sleep(2000);
                 System.exit(0);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -694,23 +696,25 @@ public class ResourceManager implements IResourceManager {
             state.transactionStates.put(xid, "Abort");
             vote = false;
         }
-        crashIfModeIs(ResourceManagerCrashModes.AFTER_SENDING_ANSWER);
+        crashIfModeIs(ResourceManagerCrashModes.AFTER_DECIDING_VOTE_ANSWER);
 
-        new Thread(() -> {
+        Thread crashThread = new Thread(() -> {
             try {
-                Thread.sleep(1000);
+                Thread.sleep(500);
                 crashIfModeIs(ResourceManagerCrashModes.AFTER_SENDING_ANSWER);
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }).start();
+        });
         if (vote) {
-
+            System.out.println("Voting yes for "+xid);
             state.transactionStates.put(xid, "Yes");
             stopTimer(xid);
         }
         saveState();
 
+        crashThread.start();
+        System.out.println("Sending a "+((vote)?"Yes":"No")+" vote for "+xid);
         return vote;
     }
 
@@ -737,13 +741,17 @@ public class ResourceManager implements IResourceManager {
     }
 
     private void recover() {
-        try (ObjectInputStream transactionStatesFile =
-                     new ObjectInputStream(new FileInputStream(trxStateLogFilename()));
-             ObjectInputStream dataStore =
-                     new ObjectInputStream(new FileInputStream(readMasterRecordFileContents()));
-        ) {
+        try  {
+            System.err.println("Recovering from " + trxStateLogFilename());
+
+            ObjectInputStream transactionStatesFile =
+                    new ObjectInputStream(new FileInputStream(trxStateLogFilename()));
+
 
             state = (ResourceManagerState) transactionStatesFile.readObject();
+            transactionStatesFile.close();
+
+            crashIfModeIs(ResourceManagerCrashModes.DURING_RECOVERY);
 
             for (int xid : state.pendingXids) {
                 if (state.transactionStates.containsKey(xid)) {
@@ -753,26 +761,44 @@ public class ResourceManager implements IResourceManager {
                     }
                     // Waits indefinitely ¯\_(ツ)_/¯ according to Alex
                     else if (state.transactionStates.get(xid).equals("Yes")) {
+                        System.out.println("Found a yes vote for "+xid+", will wait for response from coordinator (might wait forever! ¯\\_(ツ)_/¯).");
                         continue;
                     } else {
+                        System.out.println("Found a 2PC vote request for "+xid+", will abort since coordinator should have aborted.");
                         // Technically in 2PC we need to send an abort vote to the coordinator, but ok because it will timeout and abort, right?
                         abort(xid);
                     }
                 }
             }
-        } catch(EOFException e){
-            System.err.println(trxStateLogFilename()+" is empty, no existing previous state to restore.");
+        } catch (EOFException e) {
+            System.err.println(trxStateLogFilename() + " is empty, no existing previous state to restore.");
         } catch (FileNotFoundException e) {
-            System.err.println("File not found "+e.getMessage());
+            System.err.println("File not found " + e.getMessage());
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+
+        try{
+            ObjectInputStream dataStore =
+                    new ObjectInputStream(new FileInputStream(readMasterRecordFileContents()));
+            m_data = (RMHashMap) dataStore.readObject();
+            dataStore.close();
+        } catch (EOFException e) {
+            System.err.println(readMasterRecordFileContents() + " is empty, no existing previous data on masterRecord to restore.");
+        } catch (FileNotFoundException e) {
+            System.err.println("File not found " + e.getMessage());
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         }
     }
 
     private void saveState() {
-        try (ObjectOutputStream oos =
-                     new ObjectOutputStream(new FileOutputStream(trxStateLogFilename()))) {
+        System.out.println("Saving state to disk...");
+        try {
+            ObjectOutputStream oos =
+                    new ObjectOutputStream(new FileOutputStream(trxStateLogFilename()));
             oos.writeObject(state);
+            oos.close();
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
@@ -785,6 +811,7 @@ public class ResourceManager implements IResourceManager {
             System.exit(1);
         }
     }
+
     private RMHashMap m_data = new RMHashMap();
 
     private static class ResourceManagerState implements Serializable {
