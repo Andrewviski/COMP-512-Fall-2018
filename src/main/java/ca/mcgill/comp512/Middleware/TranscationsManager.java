@@ -19,9 +19,8 @@ public class TranscationsManager {
         HashMap<Integer, Integer> involvementMask = new HashMap<>();
         HashMap<Integer, Long> xidTimer = new HashMap<>();
         HashMap<Integer, String> transactionStates = new HashMap<>();
-        IResourceManager.TransactionManagerCrashModes mode = IResourceManager.TransactionManagerCrashModes.NONE;
-
         Integer idGen = 1;
+        private IResourceManager.TransactionManagerCrashModes mode = IResourceManager.TransactionManagerCrashModes.NONE;
     }
 
     public enum TWOPHASECOMMIT_DECISION {
@@ -37,6 +36,7 @@ public class TranscationsManager {
     private final int TIME_TO_LIVE_MS = 25000;
     private RMIMiddleware ownerMiddleware;
     private TranscationsManagerState state;
+
 
 
     private Boolean logAccess = true;
@@ -430,10 +430,12 @@ public class TranscationsManager {
             decision &= vote;
         System.out.println("Sending a " + ((decision) ? "Yes" : "No") + " decision to participants...");
 
-        crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_DECIDING);
 
+        boolean decision_passed = false;
         if (decision) {
             state.transactionStates.put(transactionId, "Commit");
+            saveState();
+            crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_DECIDING);
             for (String name : requiredServers) {
                 try {
                     IResourceManager rm = getResourceManagerForName(name);
@@ -447,9 +449,12 @@ public class TranscationsManager {
                 } catch (Exception e) {
                     System.err.println(name + " resource manager did not receive the commit decision [ " + e.getMessage() + " ]");
                 }
+                decision_passed = true;
             }
         } else {
             state.transactionStates.put(transactionId, "Abort");
+            saveState();
+            crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_DECIDING);
             for (String name : requiredServers) {
                 try {
                     IResourceManager rm = getResourceManagerForName(name);
@@ -464,16 +469,24 @@ public class TranscationsManager {
                 } catch (Exception e) {
                     System.err.println(name + " resource manager did not receive the abort decision [ " + e.getMessage() + " ]");
                 }
+                decision_passed = true;
             }
         }
-        crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_ALL_DECISIONS);
-        return TWOPHASECOMMIT_DECISION.PROTOCOL_FAILED;
+
+        if (decision_passed && decision) {
+            return TWOPHASECOMMIT_DECISION.COMMIT;
+        } else if(decision_passed && decision){
+            return TWOPHASECOMMIT_DECISION.ABORT;
+        } else {
+            return TWOPHASECOMMIT_DECISION.PROTOCOL_FAILED;
+        }
     }
 
     private TWOPHASECOMMIT_DECISION TwoPC_Protocol(int transactionId) {
         List<String> requiredServers = GetRequiredServers(transactionId);
 
         state.transactionStates.put(transactionId, "Start");
+        saveState();
 
         TWOPHASECOMMIT_DECISION d = DecisionPhase(transactionId, VotingPhase(transactionId, requiredServers), requiredServers);
         if (d == TWOPHASECOMMIT_DECISION.PROTOCOL_FAILED) {
@@ -502,6 +515,7 @@ public class TranscationsManager {
 
         if (protocolSuccess == TWOPHASECOMMIT_DECISION.COMMIT || protocolSuccess == TWOPHASECOMMIT_DECISION.ABORT) {
             clearLocalVars(transactionId);
+            crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_ALL_DECISIONS);
             return true;
         } else if (protocolSuccess == TWOPHASECOMMIT_DECISION.PROTOCOL_FAILED) {
             System.out.println("Aborting " + transactionId + " as protocol was not successful");
@@ -617,19 +631,31 @@ public class TranscationsManager {
                 } else {
                     // Finds a Start-2PC record, abort (or resend vote request but we don't)
                     if (state.transactionStates.get(xid).equals("Start")) {
-                        System.out.println("Aborting " + xid + " find a Start-2PC record");
-                        abort(xid);
+                        System.out.println("Found start-2PC for " + xid + ", restarting the protocol");
+                        commit(xid);
                     }
                     // Resend commit request
                     else if (state.transactionStates.get(xid).equals("Commit")) {
-                        System.out.println("Commiting " + xid + " Resend commit request");
-
-                        commit(xid);
+                        System.out.println("Found Commit for " + xid + ", resending commit decisions");
+                        List<String> requiredServers = GetRequiredServers(xid);
+                        for (String name : requiredServers) {
+                            try {
+                                IResourceManager rm = getResourceManagerForName(name);
+                                try {
+                                    getResourceManagerForName(name).commit(xid);
+                                    crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_SOME_DECISIONS);
+                                } catch (Exception e) {
+                                    System.err.println("Failed to send a commit decision to " + rm.toString());
+                                }
+                            } catch (Exception e) {
+                                System.err.println(name + " resource manager did not receive the commit decision [ " + e.getMessage() + " ]");
+                            }
+                        }
+                        clearLocalVars(xid);
                     }
                     // Resend abort request
                     else if (state.transactionStates.get(xid).equals("Abort")) {
                         System.out.println("Aborting " + xid + " Resend abort request");
-
                         abort(xid);
                     }
                 }

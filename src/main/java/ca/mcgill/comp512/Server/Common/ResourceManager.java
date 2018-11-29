@@ -811,7 +811,7 @@ public class ResourceManager implements IResourceManager {
     }
 
     private void crashIfModeIs(ResourceManagerCrashModes mode) {
-        if (state.mode == mode) {
+        if (this.state.mode == mode) {
             System.exit(1);
         }
     }
