@@ -650,10 +650,8 @@ public class ResourceManager implements IResourceManager {
         // TODO: akaba, this will create a bug where a non 2PC thing is going to call abort.
         crashIfModeIs(ResourceManagerCrashModes.AFTER_REC_DECISION);
         System.out.println("Aborting " + transactionId);
-
-            state.pendingXids.remove(transactionId);
-
         stopTimer(transactionId);
+        state.pendingXids.remove(transactionId);
         state.writeSets.remove(transactionId);
         state.lockManager.UnlockAll(transactionId);
         state.latestOp.remove(transactionId);
