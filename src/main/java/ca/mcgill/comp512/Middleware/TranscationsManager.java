@@ -19,6 +19,8 @@ public class TranscationsManager {
         HashMap<Integer, Integer> involvementMask = new HashMap<>();
         HashMap<Integer, Long> xidTimer = new HashMap<>();
         HashMap<Integer, String> transactionStates = new HashMap<>();
+        IResourceManager.TransactionManagerCrashModes mode = IResourceManager.TransactionManagerCrashModes.NONE;
+
         Integer idGen = 1;
     }
 
@@ -35,7 +37,6 @@ public class TranscationsManager {
     private final int TIME_TO_LIVE_MS = 25000;
     private RMIMiddleware ownerMiddleware;
     private TranscationsManagerState state;
-    private IResourceManager.TransactionManagerCrashModes mode = IResourceManager.TransactionManagerCrashModes.NONE;
 
 
     private Boolean logAccess = true;
@@ -588,14 +589,14 @@ public class TranscationsManager {
     }
 
     private void crashIfModeIs(IResourceManager.TransactionManagerCrashModes mode) {
-        if (this.mode == mode) {
+        if (this.state.mode == mode) {
             System.exit(1);
         }
     }
 
 
     public boolean SetCrashMode(IResourceManager.TransactionManagerCrashModes mode) {
-        this.mode = mode;
+        this.state.mode = mode;
         return true;
     }
 

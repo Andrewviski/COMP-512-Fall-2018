@@ -22,7 +22,7 @@ public class ResourceManager implements IResourceManager {
     private static final int TIME_TO_LIVE_MS = 25000;
     protected static String name = "Server";
     ResourceManagerState state = new ResourceManagerState();
-    private ResourceManagerCrashModes mode = ResourceManagerCrashModes.NONE;
+
     // 0: masterRecordFilename
     // 1: masterFilename
     // 2: shadowFilename
@@ -688,7 +688,6 @@ public class ResourceManager implements IResourceManager {
 
     @Override
     public boolean prepare(int xid) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
-        // Not sure what th point of this? :/
         crashIfModeIs(ResourceManagerCrashModes.AFTER_REC_VOTE_REQ);
         boolean vote = true;
         if (!state.pendingXids.contains(xid)) {
@@ -720,7 +719,7 @@ public class ResourceManager implements IResourceManager {
 
     @Override
     public boolean resetCrashes() throws RemoteException {
-        mode = ResourceManagerCrashModes.NONE;
+        state.mode = ResourceManagerCrashModes.NONE;
         return true;
     }
 
@@ -732,7 +731,7 @@ public class ResourceManager implements IResourceManager {
 
     @Override
     public boolean crashResourceManager(String name, ResourceManagerCrashModes mode) throws RemoteException {
-        this.mode = mode;
+        this.state.mode = mode;
         return true;
     }
 
@@ -768,6 +767,9 @@ public class ResourceManager implements IResourceManager {
                         // Technically in 2PC we need to send an abort vote to the coordinator, but ok because it will timeout and abort, right?
                         abort(xid);
                     }
+                }
+                else{
+                    abort(xid);
                 }
             }
         } catch (EOFException e) {
@@ -807,7 +809,7 @@ public class ResourceManager implements IResourceManager {
     }
 
     private void crashIfModeIs(ResourceManagerCrashModes mode) {
-        if (this.mode == mode) {
+        if (state.mode == mode) {
             System.exit(1);
         }
     }
@@ -821,5 +823,6 @@ public class ResourceManager implements IResourceManager {
         private LockManager lockManager;
         private Set<Integer> pendingXids = Collections.newSetFromMap(new ConcurrentHashMap<Integer, Boolean>());
         private Map<Integer, String> transactionStates = new ConcurrentHashMap<>();
+        private ResourceManagerCrashModes mode = ResourceManagerCrashModes.NONE;
     }
 }

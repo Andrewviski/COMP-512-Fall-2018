@@ -441,7 +441,7 @@ public abstract class Client {
                     checkArgumentsCount(2, arguments.size());
                     int commit_id = toInt(arguments.get(1));
                     if (resourceManager.commit(commit_id)) {
-                        System.out.println("Transcation commited");
+                        System.out.println("Transcation request went through");
                         return true;
                     } else {
                         System.out.println("Transcation could not be commited");
@@ -545,13 +545,13 @@ public abstract class Client {
     }
 
     public static IResourceManager.TransactionManagerCrashModes toMiddlewareMode(int mode) {
-        if (mode >= 1 && mode <= 5)
+        if (mode >= 0 && mode <= 8)
             return IResourceManager.TransactionManagerCrashModes.values()[mode];
         return null;
     }
 
     public static IResourceManager.ResourceManagerCrashModes toResourceManagerMode(int mode) {
-        if (mode >= 1 && mode <= 8)
+        if (mode >= 0 && mode <= 5)
             return IResourceManager.ResourceManagerCrashModes.values()[mode];
         return null;
     }
