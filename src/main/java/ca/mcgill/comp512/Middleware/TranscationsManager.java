@@ -643,7 +643,6 @@ public class TranscationsManager {
                                 IResourceManager rm = getResourceManagerForName(name);
                                 try {
                                     getResourceManagerForName(name).commit(xid);
-                                    crashIfModeIs(IResourceManager.TransactionManagerCrashModes.AFTER_SENDING_SOME_DECISIONS);
                                 } catch (Exception e) {
                                     System.err.println("Failed to send a commit decision to " + rm.toString());
                                 }
