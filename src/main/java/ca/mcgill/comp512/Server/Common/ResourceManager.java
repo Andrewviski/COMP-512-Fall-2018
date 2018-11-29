@@ -89,6 +89,7 @@ public class ResourceManager implements IResourceManager {
                             if (System.currentTimeMillis() - state.xidTimer.get(xid) > TIME_TO_LIVE_MS) {
                                 abort(xid);
                                 state.transactionStates.put(xid, "Abort");
+                                saveState();
                             }
                         }
 
@@ -109,11 +110,13 @@ public class ResourceManager implements IResourceManager {
     private void stopTimer(int xid) {
         System.out.println("Stopping the timer for " + xid);
         state.xidTimer.remove(xid);
+        saveState();
     }
 
     private void resetTimer(int xid) {
         System.out.println("Reseting the timer for " + xid);
         state.xidTimer.put(xid, System.currentTimeMillis());
+        saveState();
     }
 
     private String masterRecordFilename() {
@@ -132,14 +135,14 @@ public class ResourceManager implements IResourceManager {
         return filenames[3];
     }
 
-    private void WriteToDisk(int transactionId) {
+    private void saveShadow(int transactionId) {
         Xlock(transactionId, storageKey);
         String latest = readMasterRecordFileContents();
 
         // Write the object
         try {
             ObjectOutputStream objectOut = new ObjectOutputStream(new FileOutputStream((latest.equals(masterFilename())) ? shadowFilename() : masterFilename()));
-            objectOut.writeObject(state.m_data);
+            objectOut.writeObject(m_data);
             objectOut.close();
         } catch (Exception e) {
             e.printStackTrace();
@@ -177,13 +180,17 @@ public class ResourceManager implements IResourceManager {
 
     private boolean Xlock(int id, String name) throws DeadlockException {
         synchronized (state.lockManager) {
-            return state.lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_WRITE);
+            boolean r =  state.lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_WRITE);
+            saveState();
+            return r;
         }
     }
 
     private boolean Slock(int id, String name) throws DeadlockException {
         synchronized (state.lockManager) {
-            return state.lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_READ);
+            boolean r = state.lockManager.Lock(id, name, TransactionLockObject.LockType.LOCK_READ);
+            saveState();
+            return r;
         }
     }
 
@@ -200,16 +207,20 @@ public class ResourceManager implements IResourceManager {
 
         // Get the updated version
         synchronized (state.writeSets) {
-            if (!state.writeSets.containsKey(xid))
+            if (!state.writeSets.containsKey(xid)){
                 state.writeSets.put(xid, new HashMap<>());
+                saveState();
+            }
+
             HashMap<String, RMItem> writeSet = state.writeSets.get(xid);
+            saveState();
             if (writeSet.containsKey(key))
                 return writeSet.get(key);
         }
 
         // Get datastore's version.
-        synchronized (state.m_data) {
-            RMItem item = state.m_data.get(key);
+        synchronized (m_data) {
+            RMItem item = m_data.get(key);
             if (item != null) {
                 return (RMItem) item.clone();
             }
@@ -219,8 +230,8 @@ public class ResourceManager implements IResourceManager {
 
     // Writes a data item
     protected void flushData(String key, RMItem value) {
-        synchronized (state.m_data) {
-            state.m_data.put(key, value);
+        synchronized (m_data) {
+            m_data.put(key, value);
         }
     }
 
@@ -228,22 +239,28 @@ public class ResourceManager implements IResourceManager {
         if (!Xlock(xid, key))
             return;
         synchronized (state.writeSets) {
-            if (!state.writeSets.containsKey(xid))
+            if (!state.writeSets.containsKey(xid)){
                 state.writeSets.put(xid, new HashMap<>());
+            }
+
             HashMap<String, RMItem> writeSet = state.writeSets.get(xid);
             writeSet.put(key, value);
 
             //update latest operation to be a write.
-            if (!state.latestOp.containsKey(xid))
+            if (!state.latestOp.containsKey(xid)){
                 state.latestOp.put(xid, new HashMap<>());
+
+            }
+
             state.latestOp.get(xid).put(key, 'w');
+            saveState();
         }
     }
 
     // Remove the item out of storage
     protected void flushDataRemoval(String key) {
-        synchronized (state.m_data) {
-            state.m_data.remove(key);
+        synchronized (m_data) {
+            m_data.remove(key);
         }
     }
 
@@ -261,6 +278,8 @@ public class ResourceManager implements IResourceManager {
                     state.latestOp.put(xid, new HashMap<>());
                 state.latestOp.get(xid).put(key, 'd');
             }
+            saveState();
+
         }
     }
 
@@ -274,6 +293,8 @@ public class ResourceManager implements IResourceManager {
         } else {
             state.xidTimer.put(xid, System.currentTimeMillis());
         }
+        saveState();
+
     }
 
     // Deletes the encar item
@@ -602,7 +623,7 @@ public class ResourceManager implements IResourceManager {
             }
             // write to disk
             System.out.println("Writing " + transactionId + " to disk");
-            WriteToDisk(transactionId);
+            saveShadow(transactionId);
 
 
                 state.pendingXids.remove(transactionId);
@@ -613,6 +634,8 @@ public class ResourceManager implements IResourceManager {
             state.latestOp.remove(transactionId);
         }
         state.transactionStates.put(transactionId, "Commit");
+        saveState();
+
         return true;
 
     }
@@ -635,6 +658,7 @@ public class ResourceManager implements IResourceManager {
         state.lockManager.UnlockAll(transactionId);
         state.latestOp.remove(transactionId);
         state.transactionStates.put(transactionId, "Abort");
+        saveState();
     }
 
     /**
@@ -679,6 +703,8 @@ public class ResourceManager implements IResourceManager {
             state.transactionStates.put(xid, "Yes");
             stopTimer(xid);
         }
+        saveState();
+
         return vote;
     }
 
@@ -737,12 +763,10 @@ public class ResourceManager implements IResourceManager {
         }
     }
 
-    private void saveLog() {
+    private void saveState() {
         try (ObjectOutputStream oos =
                      new ObjectOutputStream(new FileOutputStream(trxStateLogFilename()))) {
-
             oos.writeObject(state);
-
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
@@ -755,14 +779,14 @@ public class ResourceManager implements IResourceManager {
             System.exit(1);
         }
     }
+    private RMHashMap m_data = new RMHashMap();
 
     private static class ResourceManagerState implements Serializable {
-        private RMHashMap m_data = new RMHashMap();
-        private Map<Integer, HashMap<String, RMItem>> writeSets = new HashMap<>();
-        private Map<Integer, HashMap<String, Character>> latestOp = new HashMap<>();
-        private Map<Integer, Long> xidTimer = new HashMap<>();
+        private Map<Integer, HashMap<String, RMItem>> writeSets = new ConcurrentHashMap<>();
+        private Map<Integer, HashMap<String, Character>> latestOp = new ConcurrentHashMap<>();
+        private Map<Integer, Long> xidTimer = new ConcurrentHashMap<>();
         private LockManager lockManager;
         private Set<Integer> pendingXids = Collections.newSetFromMap(new ConcurrentHashMap<Integer, Boolean>());
-        private Map<Integer, String> transactionStates = new HashMap<>();
+        private Map<Integer, String> transactionStates = new ConcurrentHashMap<>();
     }
 }
